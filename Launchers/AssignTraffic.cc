@@ -80,6 +80,8 @@ struct ActiveVertex {
 template <typename GraphT>
 inline void assignZonesToODPairs(
     const GraphT& inputGraph, std::vector<ClusteredOriginDestination>& odPairs, const int maxDiam) {
+
+  std::cout << "Convert to RoutingKit repr..." << std::flush;
   // Convert the input graph to RoutingKit's graph representation.
   const int numVertices = inputGraph.numVertices();
   std::vector<float> lats(numVertices);
@@ -94,16 +96,23 @@ inline void assignZonesToODPairs(
       heads[e] = inputGraph.edgeHead(e);
     }
   }
+  std::cout << " done." << std::endl;
 
+  std::cout << "Compute contraction order..." << std::flush;
   // Compute the contraction order and the corresponding elimination tree.
   const auto graph = RoutingKit::make_graph_fragment(numVertices, tails, heads);
   auto computeSep = [&lats, &lngs](const RoutingKit::GraphFragment& graph) {
     return derive_separator_from_cut(graph, inertial_flow(graph, 30, lats, lngs).is_node_on_side);
   };
   const auto order = compute_nested_node_dissection_order(graph, computeSep);
+  std::cout << " done." << std::endl;
+
+  std::cout << "Computing elimination tree..." << std::flush;
   const auto cch = RoutingKit::CustomizableContractionHierarchy(order, tails, heads);
   std::vector<int> tree(cch.elimination_tree_parent.begin(), cch.elimination_tree_parent.end());
+  std::cout << " done." << std::endl;
 
+  std::cout << "Converting tree..." << std::flush;
   // Build the elimination out-tree from the elimination in-tree.
   std::vector<int> firstChild(numVertices + 1);
   std::vector<int> children(numVertices - 1);
@@ -119,6 +128,7 @@ inline void assignZonesToODPairs(
   for (auto v = numVertices - 1; v > 0; --v)
     firstChild[v] = firstChild[v - 1];
   firstChild[0] = 0;
+  std::cout << " done." << std::endl;
 
   // Decompose the elimination tree into as few cells with bounded diameter as possible.
   BitVector isRoot(numVertices);
@@ -189,7 +199,9 @@ inline void assignTraffic(const CommandLineParser& clp) {
   if (!statFileName.empty() && !endsWith(statFileName, ".csv"))
     statFileName += ".csv";
 
+
   // Read the graph from file.
+  std::cout << "Reading graph from file..." << std::flush;
   std::ifstream graphFile(graphFileName, std::ios::binary);
   if (!graphFile.good())
     throw std::invalid_argument("file not found -- '" + graphFileName + "'");
@@ -216,8 +228,10 @@ inline void assignTraffic(const CommandLineParser& clp) {
     assert(origToCurrentId[graph.sequentialVertexId(u)] == INVALID_VERTEX);
     origToCurrentId[graph.sequentialVertexId(u)] = u;
   }
+  std::cout << " done." << std::endl;
 
   // Read the OD pairs from file and reorder them if necessary.
+  std::cout << "Reading OD-pairs from file..." << std::flush;
   auto odPairs = importClusteredODPairsFrom(demandFileName);
   for (auto& pair : odPairs) {
     assert(pair.origin >= 0); assert(pair.origin <= maxOrigId);
@@ -225,6 +239,9 @@ inline void assignTraffic(const CommandLineParser& clp) {
     pair.origin = origToCurrentId[pair.origin];
     pair.destination = origToCurrentId[pair.destination];
   }
+  std::cout << " done." << std::endl;
+
+  std::cout << "Reordering pairs ..." << std::flush;
   if (ord == "random") {
     std::shuffle(odPairs.begin(), odPairs.end(), std::minstd_rand());
   } else if (ord == "sorted") {
@@ -233,6 +250,7 @@ inline void assignTraffic(const CommandLineParser& clp) {
   } else if (ord != "input") {
     throw std::invalid_argument("unrecognized order -- '" + ord + "'");
   }
+  std::cout << " done." << std::endl;
 
   std::ofstream flowFile;
   if (!flowFileName.empty()) {

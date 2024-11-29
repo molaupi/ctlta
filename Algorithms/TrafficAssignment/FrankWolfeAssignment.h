@@ -47,6 +47,7 @@ class FrankWolfeAssignment {
       std::ofstream& flowFile, std::ofstream& distFile, std::ofstream& statFile,
       const int numIterations = 0, const bool outputIntermediates = false) {
     assert(numIterations >= 0);
+    std::cout << "Entered FW." << std::endl;
     Timer timer;
     auto prevSkipInterval = 1u;
     determineInitialSolution(prevSkipInterval);

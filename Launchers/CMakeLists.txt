@@ -1,7 +1,8 @@
 add_executable(AssignTraffic AssignTraffic.cc
                 ../Algorithms/CHL/road_network.cpp ../Algorithms/CHL/util.cpp)
 target_compile_definitions(AssignTraffic PRIVATE CSV_IO_NO_THREAD)
-target_link_libraries(AssignTraffic routingkit kassert vectorclass fast_cpp_csv_parser)
+# target_include_directories(AssignTraffic PRIVATE ${Boost_INCLUDE_DIR})
+target_link_libraries(AssignTraffic Boost::boost routingkit kassert vectorclass fast_cpp_csv_parser)
 if((NUM_THREADS GREATER 1) AND OpenMP_FOUND)
   message("Linking openmp to AssignTraffic target.")
   target_link_libraries(AssignTraffic OpenMP::OpenMP_CXX)

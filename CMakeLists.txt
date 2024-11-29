@@ -39,6 +39,8 @@ endif()
 
 include_directories(${CMAKE_SOURCE_DIR})
 
+find_package(Boost REQUIRED)
+
 find_package(OpenMP)
 find_package(CGAL REQUIRED)
 find_library(cairo_LIBRARY cairo)
