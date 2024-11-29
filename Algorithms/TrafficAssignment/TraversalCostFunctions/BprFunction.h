@@ -1,6 +1,6 @@
 #pragma once
 
-#include <vectorclass/vectorclass.h>
+#include <vectorclass.h>
 
 // The BPR travel cost function, relating the travel time on an edge to the flow on this edge.
 template <typename GraphT>

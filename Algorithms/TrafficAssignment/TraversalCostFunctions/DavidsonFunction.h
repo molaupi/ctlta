@@ -3,7 +3,7 @@
 #include <cassert>
 #include <cmath>
 
-#include <vectorclass/vectorclass.h>
+#include <vectorclass.h>
 
 // The Davidson travel cost function, relating the travel time on an edge to the flow on this edge.
 template <typename GraphT>

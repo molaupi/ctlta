@@ -1,6 +1,6 @@
 #pragma once
 
-#include <vectorclass/vectorclass.h>
+#include <vectorclass.h>
 
 #include "Algorithms/TrafficAssignment/TraversalCostFunctions/DavidsonFunction.h"
 

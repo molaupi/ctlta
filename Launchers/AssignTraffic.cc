@@ -17,6 +17,7 @@
 #include "Algorithms/TrafficAssignment/Adapters/BiDijkstraAdapter.h"
 #include "Algorithms/TrafficAssignment/Adapters/CCHAdapter.h"
 #include "Algorithms/TrafficAssignment/Adapters/CHAdapter.h"
+#include "Algorithms/TrafficAssignment/Adapters/CHLAdapter.h"
 #include "Algorithms/TrafficAssignment/Adapters/DijkstraAdapter.h"
 #include "Algorithms/TrafficAssignment/ObjectiveFunctions/SystemOptimum.h"
 #include "Algorithms/TrafficAssignment/ObjectiveFunctions/UserEquilibrium.h"
@@ -53,7 +54,7 @@ inline void printUsage() {
       "  -f <func>         traversal cost function\n"
       "                      possible values: BPR (default) Davidson M-Davidson inverse\n"
       "  -a <algo>         shortest-path algorithm\n"
-      "                      possible values: Dijkstra Bi-Dijkstra CH CCH (default)\n"
+      "                      possible values: Dijkstra Bi-Dijkstra CH CCH (default) CHL\n"
       "  -o <ord>          order in which the OD pairs are processed\n"
       "                      possible values: random input sorted (default)\n"
       "  -U <num>          maximum diameter of a cell (used for ordering OD pairs)\n"
@@ -194,9 +195,10 @@ inline void assignTraffic(const CommandLineParser& clp) {
     throw std::invalid_argument("file not found -- '" + graphFileName + "'");
   typename FWAssignmentT::Graph graph(graphFile);
   graphFile.close();
-  FORALL_EDGES(graph, e) {
+  FORALL_VALID_EDGES(graph, u, e) {
     graph.capacity(e) = std::max(std::round(analysisPeriod * graph.capacity(e)), 1.0);
     graph.edgeId(e) = e;
+    graph.edgeTail(e) = u;
   }
   if (useLengths)
     FORALL_EDGES(graph, e)
@@ -280,7 +282,7 @@ template <template <typename> class ObjFunctionT, template <typename> class Trav
 void chooseShortestPathAlgo(const CommandLineParser& clp) {
   using VertexAttributes = VertexAttrs<LatLngAttribute, SequentialVertexIdAttribute>;
   using EdgeAttributes = EdgeAttrs<
-      CapacityAttribute, EdgeIdAttribute, LengthAttribute, TravelTimeAttribute,
+      CapacityAttribute, EdgeIdAttribute, EdgeTailAttribute, LengthAttribute, TravelTimeAttribute,
       TraversalCostAttribute>;
   using Graph = StaticGraph<VertexAttributes, EdgeAttributes>;
 
@@ -301,6 +303,9 @@ void chooseShortestPathAlgo(const CommandLineParser& clp) {
     using FWAssignment = FrankWolfeAssignment<
         ObjFunctionT, TraversalCostFunctionT, trafficassignment::CCHAdapter, Graph>;
     assignTraffic<FWAssignment>(clp);
+  } else if (algo == "CHL") {
+      using FWAssignment = FrankWolfeAssignment<ObjFunctionT, TraversalCostFunctionT, trafficassignment::CHLAdapter, Graph>;
+      assignTraffic<FWAssignment>(clp);
   } else {
     throw std::invalid_argument("unrecognized shortest-path algorithm -- '" + algo + "'");
   }
@@ -331,6 +336,8 @@ void chooseObjFunction(const CommandLineParser& clp) {
 }
 
 int main(int argc, char* argv[]) {
+    std::cout << "Using " << NUM_THREADS << " threads for parallel shortest path computations." << std::endl;
+    omp_set_num_threads(NUM_THREADS);
   try {
     CommandLineParser clp(argc, argv);
     if (clp.isSet("help")) {

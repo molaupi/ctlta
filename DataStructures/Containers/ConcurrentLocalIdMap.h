@@ -5,7 +5,7 @@
 #include <numeric>
 #include <vector>
 
-#include <omp.h>
+#include "Tools/OpenMP.h"
 
 // This class maps a set of n IDs in the range 0..m - 1 to the range 0..n - 1, preserving the
 // relative order. We call the IDs in the larger range global IDs, and the IDs in the smaller

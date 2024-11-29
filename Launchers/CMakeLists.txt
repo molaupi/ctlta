@@ -1,8 +1,13 @@
-add_executable(AssignTraffic AssignTraffic.cc)
+add_executable(AssignTraffic AssignTraffic.cc
+                ../Algorithms/CHL/road_network.cpp ../Algorithms/CHL/util.cpp)
 target_compile_definitions(AssignTraffic PRIVATE CSV_IO_NO_THREAD)
-target_link_libraries(AssignTraffic ${RoutingKit_LIBRARY})
-if(OpenMP_FOUND)
+target_link_libraries(AssignTraffic routingkit kassert vectorclass fast_cpp_csv_parser)
+if((NUM_THREADS GREATER 1) AND OpenMP_FOUND)
+  message("Linking openmp to AssignTraffic target.")
   target_link_libraries(AssignTraffic OpenMP::OpenMP_CXX)
+  target_compile_definitions(AssignTraffic PRIVATE NUM_THREADS=${NUM_THREADS})
+else()
+  target_compile_definitions(AssignTraffic PRIVATE NUM_THREADS=1)
 endif()
 
 option(TA_USE_CFW "Make each descent direction conjugate to the last direction." ON)

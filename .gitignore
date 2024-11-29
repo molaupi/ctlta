@@ -1,8 +1,14 @@
 # Build tree.
 /Build/
+/cmake-*/
+
+# Generated input files
+/Inputs/
+/Publications/KaRRi/Inputs/
 
 # Various config files.
 /.settings/
 /.cproject
 /.project
 /.pydevproject
+/.idea/

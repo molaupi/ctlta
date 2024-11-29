@@ -48,3 +48,12 @@ target_link_libraries(RadiationModel ${PROJ_LIBRARY})
 add_executable(VisumExtractPoi VisumExtractPoi.cc)
 target_compile_definitions(VisumExtractPoi PRIVATE CSV_IO_NO_THREAD)
 target_link_libraries(VisumExtractPoi ${PROJ_LIBRARY})
+
+add_executable(PrepareGraphForUndirectedTA PrepareGraphForUndirectedTA.cc)
+target_compile_definitions(PrepareGraphForUndirectedTA PRIVATE CSV_IO_NO_THREAD)
+target_link_libraries(PrepareGraphForUndirectedTA PRIVATE fast_cpp_csv_parser)
+
+
+add_executable(GraphToSimpleDimacs GraphToSimpleDimacs.cc)
+target_compile_definitions(GraphToSimpleDimacs PRIVATE CSV_IO_NO_THREAD)
+target_link_libraries(GraphToSimpleDimacs PRIVATE fast_cpp_csv_parser)

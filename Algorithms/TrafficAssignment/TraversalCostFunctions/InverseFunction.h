@@ -3,7 +3,7 @@
 #include <cassert>
 #include <cmath>
 
-#include <vectorclass/vectorclass.h>
+#include <vectorclass.h>
 
 // An inverse travel cost function, which decreases (rather than increases) as the flow increases.
 // It should model the costs for operating public transit. The more people use public transit, the

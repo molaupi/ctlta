@@ -5,6 +5,8 @@
 #include <cstdint>
 #include <vector>
 
+#include <kassert/kassert.hpp>
+
 #include <routingkit/nested_dissection.h>
 
 #include "Algorithms/CCH/CCH.h"
@@ -17,6 +19,7 @@
 #include "DataStructures/Labels/SimdLabelSet.h"
 #include "DataStructures/Partitioning/SeparatorDecomposition.h"
 #include "Tools/Simd/AlignedVector.h"
+#include "Algorithms/CH/CHPathUnpacker.h"
 
 namespace trafficassignment {
 
@@ -53,7 +56,8 @@ class CCHAdapter {
 
     // Computes shortest paths from each source to its target simultaneously.
     void run(std::array<int, K>& sources, std::array<int, K>& targets, const int k) {
-      // Run a centralized CH search.
+
+        // Run a centralized CH search.
       for (auto i = 0; i < K; ++i) {
         sources[i] = minimumWeightedCH.rank(sources[i]);
         targets[i] = minimumWeightedCH.rank(targets[i]);

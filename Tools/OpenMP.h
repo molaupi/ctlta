@@ -9,6 +9,10 @@
 
 #else
 
+void omp_set_num_threads(int) {
+    // no op
+}
+
 int omp_get_num_threads(void)
 {
   return 1;

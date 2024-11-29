@@ -1,11 +1,11 @@
-cmake_minimum_required(VERSION 3.14 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.24 FATAL_ERROR)
 project(RoutingFramework CXX)
 
 # Directories containing .cc source files.
 set(SOURCE_DIRECTORIES Launchers RawData)
 
 # Determine the language standard.
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -42,8 +42,9 @@ include_directories(${CMAKE_SOURCE_DIR})
 find_package(OpenMP)
 find_package(CGAL REQUIRED)
 find_library(cairo_LIBRARY cairo)
-find_library(PROJ_LIBRARY proj)
-find_library(RoutingKit_LIBRARY routingkit)
+
+include(FetchContentDependencies.cmake)
+add_subdirectory(External)
 
 # Clang does not support the option -frounding-math, thus remove it from the CGAL compile options.
 if(CMAKE_CXX_COMPILER_ID MATCHES Clang)

@@ -4,7 +4,7 @@
 #include <cassert>
 #include <type_traits>
 
-#include <vectorclass/vectorclass.h>
+#include <vectorclass.h>
 
 #include "DataStructures/Labels/ParentInfo.h"
 #include "Tools/TemplateProgramming.h"
