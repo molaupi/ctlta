@@ -316,6 +316,9 @@ void chooseShortestPathAlgo(const CommandLineParser& clp) {
   } else if (algo == "CHL") {
       using FWAssignment = FrankWolfeAssignment<ObjFunctionT, TraversalCostFunctionT, trafficassignment::CHLAdapter, Graph>;
       assignTraffic<FWAssignment>(clp);
+  } else if (algo == "TopologyCentricTreeHierarchy") {
+      using FWAssignment = FrankWolfeAssignment<ObjFunctionT, TraversalCostFunctionT, trafficassignment::TTLAdapter, Graph>;
+      assignTraffic<FWAssignment>(clp);
   } else {
     throw std::invalid_argument("unrecognized shortest-path algorithm -- '" + algo + "'");
   }

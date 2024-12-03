@@ -29,13 +29,11 @@ if(DISABLE_AVX)
 endif()
 
 # Request warnings.
-if(CMAKE_CXX_COMPILER_ID STREQUAL GNU)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wfatal-errors -Wpedantic -pedantic-errors\
-      -Wall -Wextra -ftemplate-backtrace-limit=1 -Wno-unknown-pragmas -Wno-sign-compare")
-elseif(CMAKE_CXX_COMPILER_ID MATCHES Clang)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wall -Wextra -pedantic-errors -ferror-limit=1\
-      -ftemplate-backtrace-limit=1 -Wno-sign-compare")
-endif()
+if (CMAKE_CXX_COMPILER_ID MATCHES GNU)
+  set(FULL_WARNINGS "-Werror" "-Wfatal-errors" "-Wpedantic" "-pedantic-errors" "-Wall" "-Wextra" "-ftemplate-backtrace-limit=1" "-Wno-unknown-pragmas" "-Wno-sign-compare")
+elseif (CMAKE_CXX_COMPILER_ID MATCHES Clang)
+  set(FULL_WARNINGS "-Werror" "-Wall" "-Wextra" "-pedantic-errors" "-ferror-limit=1" "-ftemplate-backtrace-limit=1" "-Wno-sign-compare")
+endif ()
 
 include_directories(${CMAKE_SOURCE_DIR})
 

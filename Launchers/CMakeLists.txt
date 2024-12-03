@@ -41,7 +41,7 @@ endif()
 
 add_executable(RunP2PAlgo RunP2PAlgo.cc)
 target_compile_definitions(RunP2PAlgo PRIVATE CSV_IO_NO_THREAD)
-target_link_libraries(RunP2PAlgo ${RoutingKit_LIBRARY})
+target_link_libraries(RunP2PAlgo routingkit kassert vectorclass fast_cpp_csv_parser)
 if(OpenMP_FOUND)
   target_link_libraries(RunP2PAlgo OpenMP::OpenMP_CXX)
 endif()

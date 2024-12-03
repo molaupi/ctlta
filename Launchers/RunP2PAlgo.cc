@@ -10,6 +10,10 @@
 #include <csv.h>
 #include <routingkit/nested_dissection.h>
 
+#include "Algorithms/TTL/TopologyCentricTreeHierarchy.h"
+#include "Algorithms/TTL/TruncatedTreeLabelling.h"
+#include "Algorithms/TTL/TTLMetric.h"
+#include "Algorithms/TTL/TTLQuery.h"
 #include "Algorithms/CCH/CCH.h"
 #include "Algorithms/CCH/CCHMetric.h"
 #include "Algorithms/CCH/EliminationTreeQuery.h"
@@ -249,6 +253,40 @@ inline void runQueries(const CommandLineParser& clp) {
     CCHTree algo(minCH, cch.getEliminationTree());
     runQueries(algo, demandFileName, outputFile, [&](const int v) { return minCH.rank(v); });
 
+  } else if (algorithmName == "TTL") {
+
+      // Run truncated tree labelling (TTL) queries
+      std::ifstream graphFile(graphFileName, std::ios::binary);
+      if (!graphFile.good())
+          throw std::invalid_argument("file not found -- '" + graphFileName + "'");
+      InputGraph graph(graphFile);
+      graphFile.close();
+
+      std::ifstream sepFile(sepFileName, std::ios::binary);
+      if (!sepFile.good())
+          throw std::invalid_argument("file not found -- '" + sepFileName + "'");
+      SeparatorDecomposition sepDecomp;
+      sepDecomp.readFrom(sepFile);
+      sepFile.close();
+
+      CCH cch;
+      cch.preprocess(graph, sepDecomp);
+
+      TopologyCentricTreeHierarchy treeHierarchy;
+      treeHierarchy.preprocess(graph, sepDecomp);
+
+      TruncatedTreeLabelling ttl(treeHierarchy);
+      ttl.init();
+
+      TTLMetric metric(treeHierarchy, cch, useLengths? &graph.length(0) : &graph.travelTime(0));
+      metric.buildCustomizedTTL(ttl);
+
+      outputFile << "# Graph: " << graphFileName << '\n';
+      outputFile << "# Separator: " << sepFileName << '\n';
+      outputFile << "# OD pairs: " << demandFileName << '\n';
+
+      TTLQuery algo(treeHierarchy, ttl);
+      runQueries(algo, demandFileName, outputFile, [&](const int v) { return cch.getRanks()[v]; });
   } else {
 
     throw std::invalid_argument("invalid P2P algorithm -- '" + algorithmName + "'");

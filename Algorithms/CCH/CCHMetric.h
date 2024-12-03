@@ -20,6 +20,9 @@
 // This class encodes the actual cost of the edges in a customizable contraction hierarchy. It
 // stores the edge weights and contains several sequential and parallel customization algorithms.
 class CCHMetric {
+
+    friend class TTLMetric;
+
  public:
   // Constructs an individual metric incorporating the specified input weights in the specified CCH.
   CCHMetric(const CCH& cch, const int32_t* const inputWeights)
