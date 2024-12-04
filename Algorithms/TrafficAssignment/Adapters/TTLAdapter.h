@@ -36,15 +36,15 @@ namespace trafficassignment {
         class QueryAlgo {
         public:
             // Constructs a query algorithm instance working on the specified data.
-            QueryAlgo(const InputGraphT &inputGraph, const CCH &cch,
-                      const TopologyCentricTreeHierarchy &hierarchy, const TruncatedTreeLabelling &ttl,
+            QueryAlgo(const CCH &cch, const TopologyCentricTreeHierarchy &hierarchy, const TruncatedTreeLabelling &ttl,
                       AlignedVector<int> &flowsOnUpEdges, AlignedVector<int> &flowsOnDownEdges) :
-                    inputGraph(inputGraph), cch(cch), ttlQuery(hierarchy, ttl),
+                    inputGraph(inputGraph), cch(cch), ttlQuery(hierarchy, cch.getUpwardGraph(), ttl),
                     flowsOnUpEdges(flowsOnUpEdges),
                     flowsOnDownEdges(flowsOnDownEdges),
                     localFlowsOnUpEdges(flowsOnUpEdges.size(), 0),
                     localFlowsOnDownEdges(flowsOnDownEdges.size(), 0) {
-                assert(inputGraph.numEdges() == globalFlow.size());
+                assert(cch.getUpwardGraph().numEdges() == flowsOnUpEdges.size());
+                assert(cch.getUpwardGraph().numEdges() == flowsOnDownEdges.size());
                 distances.fill(INFTY);
             }
 
@@ -59,10 +59,16 @@ namespace trafficassignment {
                     distances[j] = static_cast<int>(ttlQuery.getDistance());
 
                     // Assign flow to the edges on the computed paths.
-                    const auto &upEdgePath = ttlQuery.getUpEdgePath();
-                    const auto &downEdgePath = ttlQuery.getDownEdgePath();
-                    KASSERT(cch.getUpwardGraph().edgeHead(upEdgePath.back()) ==
-                            cch.getUpwardGraph().edgeHead(downEdgePath.front()));
+                    const auto &upEdgePath = ttlQuery.getUpEdgePath(); // In reverse order by convention of Dijkstra-based approaches
+                    const auto &downEdgePath = ttlQuery.getDownEdgePath(); // In forward order by convention of Dijkstra-based approaches
+                    KASSERT((upEdgePath.empty() && downEdgePath.empty())
+                            || (upEdgePath.empty() &&
+                                cch.getRanks()[sources[j]] == cch.getUpwardGraph().edgeHead(downEdgePath.front()))
+                            || (downEdgePath.empty() &&
+                                cch.getUpwardGraph().edgeHead(upEdgePath.front()) == cch.getRanks()[targets[j]])
+                            || (!upEdgePath.empty() && !downEdgePath.empty() &&
+                                cch.getUpwardGraph().edgeHead(upEdgePath.front()) ==
+                                cch.getUpwardGraph().edgeHead(downEdgePath.front())));
                     for (const auto e: upEdgePath) {
                         KASSERT(e >= 0);
                         KASSERT(e < localFlowsOnUpEdges.size());
@@ -104,9 +110,10 @@ namespace trafficassignment {
             std::vector<int> localFlowsOnDownEdges; // The local flows in the downward graph.
         };
 
-        // Constructs an adapter for CCHs.
+        // Constructs an adapter for TTLs.
         explicit TTLAdapter(const InputGraphT &inputGraph)
-                : inputGraph(inputGraph) {
+                : inputGraph(inputGraph), treeHierarchy(), cch(),
+                  metric(treeHierarchy, cch, &inputGraph.template get<WeightT>(0)), ttl(treeHierarchy) {
             assert(inputGraph.numEdges() > 0);
             assert(inputGraph.isDefrag());
         }
@@ -159,7 +166,7 @@ namespace trafficassignment {
 
         // Invoked before each iteration.
         void customize() {
-            currentMetric.buildCustomizedTTL(ttl);
+            metric.buildCustomizedTTL(ttl);
             flowsOnUpEdges.assign(cch.getUpwardGraph().numEdges(), 0);
             flowsOnDownEdges.assign(cch.getUpwardGraph().numEdges(), 0);
 
@@ -167,38 +174,110 @@ namespace trafficassignment {
 
         // Returns an instance of the query algorithm.
         QueryAlgo getQueryAlgoInstance() {
-            return {inputGraph, cch, treeHierarchy, ttl, flowsOnUpEdges, flowsOnDownEdges};
+            return {cch, treeHierarchy, ttl, flowsOnUpEdges, flowsOnDownEdges};
         }
 
         // Propagates the flows on the edges in the search graphs to the edges in the input graph.
         void propagateFlowsToInputEdges(AlignedVector<int> &flowsOnInputEdges) {
             unused(flowsOnInputEdges);
-            // TODO: how to unpack without actually having CH?
-//            const auto &upGraph = cch.getUpwardGraph();
-//            for (auto u = inputGraph.numVertices() - 1; u >= 0; --u) {
-//                FORALL_INCIDENT_EDGES(upGraph, u, e) {
-//                    if (upGraph.unpackingInfo(e).second == INVALID_EDGE) {
-//                        flowsOnInputEdges[upGraph.unpackingInfo(e).first] = flowsOnUpEdges[e];
-//                    } else {
-//                        flowsOnDownEdges[upGraph.unpackingInfo(e).first] += flowsOnUpEdges[e];
-//                        flowsOnUpEdges[upGraph.unpackingInfo(e).second] += flowsOnUpEdges[e];
-//                    }
-//                    if (upGraph.unpackingInfo(e).second == INVALID_EDGE) {
-//                        flowsOnInputEdges[upGraph.unpackingInfo(e).first] = flowsOnDownEdges[e];
-//                    } else {
-//                        flowsOnDownEdges[upGraph.unpackingInfo(e).first] += flowsOnDownEdges[e];
-//                        flowsOnUpEdges[upGraph.unpackingInfo(e).second] += flowsOnDownEdges[e];
-//                    }
-//                }
-//            }
+
+            // For each vertex v in top-down order and for each upward edge e out of v, we propagate the upward and
+            // downward flow of e down into the lower triangles that e shortcuts (or add the flow to the corresponding
+            // input edge if e is not a shortcut).
+            const auto &cchGraph = cch.getUpwardGraph();
+            cch.forEachVertexTopDown([&](const int &v) {
+                FORALL_INCIDENT_EDGES(cchGraph, v, e) {
+                    const auto tail = cchGraph.edgeTail(e);
+                    const auto head = cchGraph.edgeHead(e);
+
+                    // Propagate upward flow on e to input edge if e is not an up shortcut or down into the
+                    // lower triangle it shortcuts.
+                    if (flowsOnUpEdges[e] >= 0) {
+                        int upInputEdge = INVALID_EDGE;
+                        if (!isUpShortCut(e, upInputEdge)) {
+                            // If e is not a shortcut edge in upwards direction, add its upward flow to the according
+                            // upwards input edge.
+                            flowsOnInputEdges[upInputEdge] += flowsOnUpEdges[e];
+                        } else {
+                            // If e is a shortcut edge in upwards direction, find lower triangle that it shortcuts,
+                            // and add upward flow of e to the downward flow of the lower edge in the triangle and to
+                            // the upward flow of the middle edge in the triangle.
+                            const auto noTriangleFound = cch.forEachLowerTriangle(
+                                    tail, head, e, [&](int, const int lower, const int inter) {
+                                        if (metric.getDownWeight(lower) + metric.getUpWeight(inter) ==
+                                            metric.getUpWeight(e)) {
+                                            flowsOnDownEdges[lower] += flowsOnUpEdges[e];
+                                            flowsOnUpEdges[inter] += flowsOnUpEdges[e];
+                                            return false;
+                                        }
+                                        return true;
+                                    });
+                            unused(noTriangleFound);
+                            KASSERT(!noTriangleFound);
+                        }
+                    }
+
+
+                    // Propagate downward flow on e to input edge if e is not a down shortcut or down into the
+                    // lower triangle it shortcuts.
+                    if (flowsOnDownEdges[e] >= 0) {
+                        int downInputEdge = INVALID_EDGE;
+                        if (!isDownShortCut(e, downInputEdge)) {
+                            // If e is not a shortcut edge in downwards direction, add its downward flow to the according
+                            // downwards input edge.
+                            flowsOnInputEdges[downInputEdge] += flowsOnDownEdges[e];
+                        } else {
+                            // If e is a shortcut edge in downwards direction, find lower triangle that it shortcuts,
+                            // and add downward flow of e to the downward flow of the middle edge in the triangle and to
+                            // the upward flow of the lower edge in the triangle.
+                            const auto noTriangleFound = cch.forEachLowerTriangle(
+                                    tail, head, e, [&](int, const int lower, const int inter) {
+                                        if (metric.getDownWeight(inter) + metric.getUpWeight(lower) ==
+                                            metric.getDownWeight(e)) {
+                                            flowsOnDownEdges[inter] += flowsOnDownEdges[e];
+                                            flowsOnUpEdges[lower] += flowsOnDownEdges[e];
+                                            return false;
+                                        }
+                                        return true;
+                                    });
+                            unused(noTriangleFound);
+                            KASSERT(!noTriangleFound);
+                        }
+                    }
+                }
+            });
         }
 
     private:
 
+        // Returns true iff edge e in the CCH graph is an upward shortcut edge.
+        // If e is not an upward shortcut edge, sets eInInputGraph to the according edge ID in the input graph.
+        bool isUpShortCut(const int &e, int &eInInputGraph) {
+            return cch.forEachUpwardInputEdge(e, [&](const int inputEdge) {
+                if (inputGraph.traversalCost(inputEdge) == metric.getUpWeight(e)) {
+                    eInInputGraph = inputEdge;
+                    return false;
+                }
+                return true;
+            });
+        }
+
+        // Returns true iff edge e in the CCH graph is a downward shortcut edge.
+        // If e is not a downward shortcut edge, sets eInInputGraph to the according edge ID in the input graph.
+        bool isDownShortCut(const int &e, int &eInInputGraph) {
+            return cch.forEachDownwardInputEdge(e, [&](const int inputEdge) {
+                if (inputGraph.traversalCost(inputEdge) == metric.getDownWeight(e)) {
+                    eInInputGraph = inputEdge;
+                    return false;
+                }
+                return true;
+            });
+        }
+
         const InputGraphT &inputGraph; // The input graph in TA format.
         TopologyCentricTreeHierarchy treeHierarchy; // Tree hierarchy underlying TTL
         CCH cch;                      // The metric-independent CCH.
-        TTLMetric currentMetric;      // The current metric for the CCH.
+        TTLMetric metric;      // The current metric for the CCH.
         TruncatedTreeLabelling ttl;   // The customized tree labelling.
 
         AlignedVector<int> flowsOnUpEdges;   // The flows on the edges in the upward graph.

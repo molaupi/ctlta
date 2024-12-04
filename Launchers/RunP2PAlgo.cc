@@ -285,7 +285,7 @@ inline void runQueries(const CommandLineParser& clp) {
       outputFile << "# Separator: " << sepFileName << '\n';
       outputFile << "# OD pairs: " << demandFileName << '\n';
 
-      TTLQuery algo(treeHierarchy, ttl);
+      TTLQuery algo(treeHierarchy, cch.getUpwardGraph(), ttl);
       runQueries(algo, demandFileName, outputFile, [&](const int v) { return cch.getRanks()[v]; });
   } else {
 

@@ -19,6 +19,16 @@ public:
         customizeLabelling(ttl);
     }
 
+    // Returns current weights on up edges of CCH.
+    const int32_t& getUpWeight(const int e) const {
+        return cchMetric.upWeights[e];
+    }
+
+    // Returns current weights on up edges of CCH.
+    const int32_t& getDownWeight(const int e) const {
+        return cchMetric.downWeights[e];
+    }
+
 private:
 
     void customizeLabelling(TruncatedTreeLabelling& ttl) {

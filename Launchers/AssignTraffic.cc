@@ -39,6 +39,7 @@
 #include "Tools/CommandLine/CommandLineParser.h"
 #include "Tools/Constants.h"
 #include "Tools/StringHelpers.h"
+#include "Algorithms/TrafficAssignment/Adapters/TTLAdapter.h"
 
 inline void printUsage() {
   std::cout <<
@@ -54,7 +55,7 @@ inline void printUsage() {
       "  -f <func>         traversal cost function\n"
       "                      possible values: BPR (default) Davidson M-Davidson inverse\n"
       "  -a <algo>         shortest-path algorithm\n"
-      "                      possible values: Dijkstra Bi-Dijkstra CH CCH (default) CHL\n"
+      "                      possible values: Dijkstra Bi-Dijkstra CH CCH (default) CHL TTL\n"
       "  -o <ord>          order in which the OD pairs are processed\n"
       "                      possible values: random input sorted (default)\n"
       "  -U <num>          maximum diameter of a cell (used for ordering OD pairs)\n"
@@ -316,7 +317,7 @@ void chooseShortestPathAlgo(const CommandLineParser& clp) {
   } else if (algo == "CHL") {
       using FWAssignment = FrankWolfeAssignment<ObjFunctionT, TraversalCostFunctionT, trafficassignment::CHLAdapter, Graph>;
       assignTraffic<FWAssignment>(clp);
-  } else if (algo == "TopologyCentricTreeHierarchy") {
+  } else if (algo == "TTL") {
       using FWAssignment = FrankWolfeAssignment<ObjFunctionT, TraversalCostFunctionT, trafficassignment::TTLAdapter, Graph>;
       assignTraffic<FWAssignment>(clp);
   } else {
