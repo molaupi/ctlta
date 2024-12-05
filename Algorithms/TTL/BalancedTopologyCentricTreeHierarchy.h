@@ -16,11 +16,14 @@ public:
     // Builds the metric-independent CCH for the specified graph and separator decomposition.
     template<typename InputGraphT>
     void preprocess(const InputGraphT &inputGraph, const SeparatorDecomposition &sepDecomp) {
-
-        KASSERT(hasStrictDissectionStructure(sepDecomp),
-                "BalancedTopologyCentricTreeHierarchy requires strict dissection structure of separator decomposition.");
+        if (!hasStrictDissectionStructure(sepDecomp))
+            throw std::invalid_argument("BalancedTopologyCentricTreeHierarchy requires strict dissection "
+                                        "structure of separator decomposition.");
         const auto sdDepth = computeSepDecompDepth(sepDecomp);
         std::cout << "Depth of sepDecomp is " << sdDepth << std::endl;
+
+        const auto sdNodesToTruncateAtUsingGeneric = getSepDecompNodesToTruncateAt(sepDecomp, 5);
+        unused(sdNodesToTruncateAtUsingGeneric);
 
         // Build labels and numCommonHubsComputer
         packedSideIds.clear();
@@ -30,7 +33,8 @@ public:
         std::vector<uint32_t> sepSizeSum;
 
         numHubs.resize(inputGraph.numVertices(), 0);
-        initializeTreeHierarchy(sepDecomp, 0, 0, 0, 0);
+        initializeTreeHierarchy(sepDecomp);
+
         KASSERT(std::all_of(packedSideIds.begin(), packedSideIds.end(),
                             [](const uint64_t &id) { return id != static_cast<uint64_t>(-1); }));
     }
@@ -79,28 +83,95 @@ private:
         return true;
     }
 
-    static size_t computeSepDecompDepth(const SeparatorDecomposition &sd) {
-        size_t maxDepth = 0;
+
+    template<typename RecurseCallbacKT,
+            typename BacktrackCallbackT>
+    static void forEachSepDecompNodeInDfsOrder(const SeparatorDecomposition &sd,
+                                               RecurseCallbacKT recurse,
+                                               BacktrackCallbackT backtrack) {
         std::stack<uint32_t> sdNodesStack;
         sdNodesStack.push(0);
         bool returnedFromChildren = false;
-        while (!sdNodesStack.empty()) {
-            maxDepth = std::max(maxDepth, sdNodesStack.size());
+        while (true) {
             const auto node = sdNodesStack.top();
+
             if (!returnedFromChildren && sd.leftChild(node) != 0) {
+                recurse(node, sd.leftChild(node));
                 sdNodesStack.push(sd.leftChild(node));
                 continue;
             }
+
+            // Done with this node. If there are siblings continue with siblings, otherwise return to parent.
+            sdNodesStack.pop();
+            if (sdNodesStack.empty())
+                break; // Finished when stack becomes empty
+
+            backtrack(node, sdNodesStack.top());
             if (sd.rightSibling(node) != 0) {
-                sdNodesStack.pop();
+                recurse(sdNodesStack.top(), sd.rightSibling(node));
                 sdNodesStack.push(sd.rightSibling(node));
                 returnedFromChildren = false;
-                continue;
+            } else {
+                returnedFromChildren = true;
             }
-            sdNodesStack.pop(); // all children done, go back up in tree
-            returnedFromChildren = true;
         }
+    }
+
+    static size_t computeSepDecompDepth(const SeparatorDecomposition &sd) {
+        uint32_t maxDepth = 0;
+        uint32_t curDepth = 1;
+        forEachSepDecompNodeInDfsOrder(sd,
+                                       [&](const int, const int) {
+                                           ++curDepth;
+                                           maxDepth = std::max(maxDepth, curDepth);
+                                       },
+                                       [&](const int, const int) {
+                                           --curDepth;
+                                       });
         return maxDepth;
+    }
+
+    // Traverses separator decomposition and computes nodes to truncate at s.t. the number of vertices in the subtree
+    // rooted at each marked node is at most theta.
+    static std::vector<int>
+    getSepDecompNodesToTruncateAt(const SeparatorDecomposition &sd, const uint32_t theta) {
+        std::vector<int> nodesToTruncateAt;
+        std::stack<uint32_t> numVerticesOnBranch;
+        numVerticesOnBranch.push(0);
+
+        forEachSepDecompNodeInDfsOrder(
+                sd,
+                [&](const int, const int) {
+                    numVerticesOnBranch.push(0);
+                },
+                [&](const int child, const int parent) {
+                    // Backtrack form child to parent when child is done.
+                    // Add number of vertices in separator at child to number of vertices
+                    auto numVerticesChild = numVerticesOnBranch.top();
+                    numVerticesOnBranch.pop();
+                    numVerticesChild += sd.lastSeparatorVertex(child) - sd.firstSeparatorVertex(child);
+
+                    // If number of vertices at child does not exceed theta, remove all children of child from
+                    // nodesToTruncateAt and add child instead. Children of child are at the back of nodesToTruncateAt.
+                    if (numVerticesChild <= theta) {
+                        for (int childChild = sd.leftChild(child);
+                             childChild != 0; childChild = sd.rightSibling(childChild))
+                            KASSERT(contains(nodesToTruncateAt.begin(), nodesToTruncateAt.end(), childChild));
+                        for (int childChild = sd.leftChild(child);
+                             childChild != 0; childChild = sd.rightSibling(childChild))
+                            nodesToTruncateAt.pop_back();
+                        nodesToTruncateAt.push_back(child);
+                    }
+
+                    // Add number of vertices at child to number of vertices at parent
+                    numVerticesOnBranch.top() += numVerticesChild;
+                });
+
+        // If whole graph has fewer than theta nodes, return root node
+        KASSERT(numVerticesOnBranch.size() == 1);
+        if (numVerticesOnBranch.top() <= theta)
+            return {0};
+        return nodesToTruncateAt;
     }
 
     // Maps a depth and the packed side ID of a node to a unique node index.
@@ -127,45 +198,51 @@ private:
         return denseSepSizeSum[idx];
     }
 
-    void initializeTreeHierarchy(const SeparatorDecomposition &sd,
-                                 const int sdNode,
-                                 const uint32_t depth,
-                                 const uint64_t packedSideIdAtNode,
-                                 const uint32_t sepSizeSumUntilHere) {
 
-        KASSERT(depth == 0 || packedSideIdAtNode < (1 << depth));
+    void initializeTreeHierarchy(const SeparatorDecomposition &sd) {
 
+        bool lastBacktrackedFromLeft = false;
+        uint64_t packedSideId = 0;
+        std::stack<uint32_t> sepSizeSumsOnBranch;
+        sepSizeSumsOnBranch.push(sd.lastSeparatorVertex(0) - sd.firstSeparatorVertex(0));
+
+        // Set num hubs for root node separator vertices
         uint32_t inSepIdx = 0;
-        for (auto v = sd.lastSeparatorVertex(sdNode) - 1; v >= sd.firstSeparatorVertex(sdNode); --v) {
-            numHubs[v] = sepSizeSumUntilHere + inSepIdx + 1;
-            packedSideIds[v] = packedSideIdAtNode;
+        for (auto v = sd.lastSeparatorVertex(0) - 1; v >= sd.firstSeparatorVertex(0); --v) {
+            numHubs[v] = inSepIdx + 1;
+            packedSideIds[v] = packedSideId;
             ++inSepIdx;
         }
 
-        const uint32_t sepSizeSumIncludingThis = sepSizeSumUntilHere + inSepIdx;
-        setSepSizeSum(depth, packedSideIdAtNode, sepSizeSumIncludingThis);
+        const auto recurse = [&] (const int parent, const int child) {
 
-        // If this is a leaf node, return.
-        if (sd.leftChild(sdNode) == 0) {
-            return;
-        }
+            // Set next bit in packedSideId to 0 for recursion to left child and to 1 for recursion to right child.
+            const auto depthOfChild = static_cast<int>(sepSizeSumsOnBranch.size());
+            setBit(packedSideId, depthOfChild - 1, lastBacktrackedFromLeft);
 
-        // Count children.
-        uint32_t numChildren = 0;
-        for (auto child = sd.leftChild(sdNode); child != 0; child = sd.rightSibling(child))
-            ++numChildren;
+            // Set number of hubs for separator vertices at child.
+            const auto sepSumSizeOnBranchUntilParent = sepSizeSumsOnBranch.top();
+            uint32_t inSepIdx = 0;
+            for (auto v = sd.lastSeparatorVertex(child) - 1; v >= sd.firstSeparatorVertex(child); --v) {
+                numHubs[v] = sepSumSizeOnBranchUntilParent + inSepIdx + 1;
+                packedSideIds[v] = packedSideId;
+                ++inSepIdx;
+            }
 
-        KASSERT(1 <= numChildren && numChildren <= 2);
+            // Memorize separator size up to and including child
+            sepSizeSumsOnBranch.push(sepSumSizeOnBranchUntilParent + inSepIdx);
+            setSepSizeSum(depthOfChild, packedSideId, sepSumSizeOnBranchUntilParent + inSepIdx);
+        };
 
-        // For every child, call recursively with correct packed side ID
-        uint32_t childIdx = 0;
-        for (auto child = sd.leftChild(sdNode); child != 0; child = sd.rightSibling(child)) {
-            const uint64_t childSideIdMask = childIdx == 0? 0 : 1 << depth;
-            const uint64_t packedSideIdOfChild = packedSideIdAtNode | childSideIdMask;
-            initializeTreeHierarchy(sd, child, depth + 1, packedSideIdOfChild, sepSizeSumIncludingThis);
-            ++childIdx;
-        }
-        KASSERT(childIdx <= 2);
+        const auto backtrack = [&] (const int child, const int parent) {
+            // Retreat one level in sepSizeSumsOnBranch and packedSideId
+            sepSizeSumsOnBranch.pop();
+            const auto depthOfChild = static_cast<int>(sepSizeSumsOnBranch.size());
+            lastBacktrackedFromLeft = !getBit(packedSideId, depthOfChild - 1); // Remember whether to do right child next
+            setBit(packedSideId, depthOfChild - 1, false);
+        };
+
+        forEachSepDecompNodeInDfsOrder(sd, recurse, backtrack);
     }
 
     std::vector<uint32_t> numHubs; // For each vertex, stores number of hubs in label of vertex
