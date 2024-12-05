@@ -10,7 +10,7 @@
 #include <csv.h>
 #include <routingkit/nested_dissection.h>
 
-#include "Algorithms/TTL/TopologyCentricTreeHierarchy.h"
+#include "Algorithms/TTL/BalancedTopologyCentricTreeHierarchy.h"
 #include "Algorithms/TTL/TruncatedTreeLabelling.h"
 #include "Algorithms/TTL/TTLMetric.h"
 #include "Algorithms/TTL/TTLQuery.h"
@@ -272,7 +272,7 @@ inline void runQueries(const CommandLineParser& clp) {
       CCH cch;
       cch.preprocess(graph, sepDecomp);
 
-      TopologyCentricTreeHierarchy treeHierarchy;
+      BalancedTopologyCentricTreeHierarchy treeHierarchy;
       treeHierarchy.preprocess(graph, sepDecomp);
 
       TruncatedTreeLabelling ttl(treeHierarchy);

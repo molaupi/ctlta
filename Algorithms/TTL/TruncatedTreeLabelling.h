@@ -1,11 +1,11 @@
 #pragma once
 
-#include "Algorithms/TTL/TopologyCentricTreeHierarchy.h"
+#include "Algorithms/TTL/BalancedTopologyCentricTreeHierarchy.h"
 
 class TruncatedTreeLabelling {
 
 public:
-    TruncatedTreeLabelling(const TopologyCentricTreeHierarchy &hierarchy)
+    TruncatedTreeLabelling(const BalancedTopologyCentricTreeHierarchy &hierarchy)
             : hierarchy(hierarchy), upLabelData(), downLabelData() {}
 
     // Initializes tree labelling with underlying tree hierarchy. (Make sure to preprocess tree hierarchy before calling).
@@ -15,7 +15,7 @@ public:
         labelOffsets.resize(numHubs.size());
         for (auto i = 0; i < numHubs.size(); ++i) {
             labelOffsets[i] = offset;
-            offset += 3 * numHubs[i]; // numHubs entries for distances and numHubs entries for path edge pointers and TODO: debug: rank in order of hub
+            offset += 2 * numHubs[i]; // numHubs entries for distances and numHubs entries for path edge pointers
         }
         upLabelData.resize(offset, INFTY);
         downLabelData.resize(offset, INFTY);
@@ -42,14 +42,6 @@ public:
         return upLabelData[labelOffsets[v] + hierarchy.getNumHubs()[v] + hubIdx];
     }
 
-    inline int32_t &upHub(const int32_t &v, const uint32_t &hubIdx) {
-        return upLabelData[labelOffsets[v] + 2 * hierarchy.getNumHubs()[v] + hubIdx];
-    }
-
-    const  int32_t &upHub(const int32_t &v, const uint32_t &hubIdx) const {
-        return upLabelData[labelOffsets[v] + 2 * hierarchy.getNumHubs()[v] + hubIdx];
-    }
-
     inline int32_t &downDist(const int32_t &v, const uint32_t &hubIdx) {
         return downLabelData[labelOffsets[v] + hubIdx];
     }
@@ -66,14 +58,6 @@ public:
         return downLabelData[labelOffsets[v] + hierarchy.getNumHubs()[v] + hubIdx];
     }
 
-    inline int32_t &downHub(const int32_t &v, const uint32_t &hubIdx) {
-        return downLabelData[labelOffsets[v] + 2 * hierarchy.getNumHubs()[v] + hubIdx];
-    }
-
-    const  int32_t &downHub(const int32_t &v, const uint32_t &hubIdx) const {
-        return downLabelData[labelOffsets[v] + 2 * hierarchy.getNumHubs()[v] + hubIdx];
-    }
-
     void assertFullyCustomized() const {
         for (int32_t v = 0; v < labelOffsets.size(); ++v) {
             for (auto i = 0; i < hierarchy.getNumHubs()[v]; ++i) {
@@ -85,7 +69,7 @@ public:
 
 private:
 
-    const TopologyCentricTreeHierarchy &hierarchy;
+    const BalancedTopologyCentricTreeHierarchy &hierarchy;
 
     std::vector<uint32_t> labelOffsets;
     std::vector<int32_t> upLabelData; // expects distances, and edge IDs to be int32_t.

@@ -7,30 +7,32 @@
 #include "DataStructures/Partitioning/SeparatorTree.h"
 #include "Algorithms/CCH/CCHMetric.h"
 
-class TopologyCentricTreeHierarchy {
+class BalancedTopologyCentricTreeHierarchy {
 
 public:
 
-    TopologyCentricTreeHierarchy() = default;
+    BalancedTopologyCentricTreeHierarchy() = default;
 
     // Builds the metric-independent CCH for the specified graph and separator decomposition.
     template<typename InputGraphT>
     void preprocess(const InputGraphT &inputGraph, const SeparatorDecomposition &sepDecomp) {
 
-        std::cout << "Depth of sepDecomp is " << computeSepDecompDepth(sepDecomp) << std::endl;
+        KASSERT(hasStrictDissectionStructure(sepDecomp),
+                "BalancedTopologyCentricTreeHierarchy requires strict dissection structure of separator decomposition.");
+        const auto sdDepth = computeSepDecompDepth(sepDecomp);
+        std::cout << "Depth of sepDecomp is " << sdDepth << std::endl;
 
         // Build labels and numCommonHubsComputer
         packedSideIds.clear();
         denseSepSizeSum.clear();
-        denseSepSizeSum.reserve((1 << (MAX_DENSE_LEVEL + 1)));
-        sparseSepSizeSum.clear();
+        denseSepSizeSum.reserve((1 << (sdDepth + 1)));
         packedSideIds.resize(inputGraph.numVertices(), static_cast<uint64_t>(-1));
         std::vector<uint32_t> sepSizeSum;
 
         numHubs.resize(inputGraph.numVertices(), 0);
         initializeTreeHierarchy(sepDecomp, 0, 0, 0, 0);
         KASSERT(std::all_of(packedSideIds.begin(), packedSideIds.end(),
-                              [](const uint64_t &id) { return id != static_cast<uint64_t>(-1); }));
+                            [](const uint64_t &id) { return id != static_cast<uint64_t>(-1); }));
     }
 
     const std::vector<uint32_t> &getNumHubs() const {
@@ -63,13 +65,21 @@ public:
 
         // Find index of separator hierarchy node that contains the LCA:
         // Level of SH node is l. Packed side ID of LCA SH node is commonLowerBits.
-        const auto& sepSizeSum = getSepSizeSum(l, commonLowerBits);
+        const auto &sepSizeSum = getSepSizeSum(l, commonLowerBits);
         return std::min(sepSizeSum, minNumHubs);
     }
 
 private:
 
-    static size_t computeSepDecompDepth(const SeparatorDecomposition& sd) {
+    // Returns true if every separator node in decomposition has at most two children, or false otherwise.
+    static bool hasStrictDissectionStructure(const SeparatorDecomposition &sd) {
+        for (const auto &n: sd.tree)
+            if (n.rightSibling != 0 && sd.tree[n.rightSibling].rightSibling != 0)
+                return false;
+        return true;
+    }
+
+    static size_t computeSepDecompDepth(const SeparatorDecomposition &sd) {
         size_t maxDepth = 0;
         std::stack<uint32_t> sdNodesStack;
         sdNodesStack.push(0);
@@ -103,26 +113,18 @@ private:
     // of node itself). Node is specified by depth and packedSideId.
     void setSepSizeSum(const uint32_t depth, const uint64_t packedSideId, const uint32_t sumSizes) {
         const auto idx = idxInSepSizeSum(depth, packedSideId);
-        if (depth <= MAX_DENSE_LEVEL) {
-            if (idx >= denseSepSizeSum.size())
-                denseSepSizeSum.resize(idx + 1, 0);
-            denseSepSizeSum[idx] = sumSizes;
-        } else {
-            sparseSepSizeSum[idx] = sumSizes;
-        }
+        KASSERT(idx < denseSepSizeSum.capacity());
+        if (idx >= denseSepSizeSum.size())
+            denseSepSizeSum.resize(idx + 1, 0);
+        denseSepSizeSum[idx] = sumSizes;
     }
 
     // Get sum of sizes of separators on hierarchy branch up to separator hierarchy node (including size of separator
     // of node itself). Node is specified by depth and packedSideId.
-    const uint32_t& getSepSizeSum(const uint32_t depth, const uint64_t packedSideId) const {
+    const uint32_t &getSepSizeSum(const uint32_t depth, const uint64_t packedSideId) const {
         const auto idx = idxInSepSizeSum(depth, packedSideId);
-        if (depth <= MAX_DENSE_LEVEL) {
-            KASSERT(idx < denseSepSizeSum.size());
-            return denseSepSizeSum[idx];
-        } else {
-            KASSERT(sparseSepSizeSum.contains(idx));
-            return sparseSepSizeSum.at(idx);
-        }
+        KASSERT(idx < denseSepSizeSum.size());
+        return denseSepSizeSum[idx];
     }
 
     void initializeTreeHierarchy(const SeparatorDecomposition &sd,
@@ -153,90 +155,25 @@ private:
         for (auto child = sd.leftChild(sdNode); child != 0; child = sd.rightSibling(child))
             ++numChildren;
 
-        KASSERT(numChildren > 0);
-
-        // sepDecomp can have more than two children per node if separator divides subgraph into more than two
-        // parts. For the tree hierarchy, we want exactly two children per separator though, so LCA computation can
-        // correctly rely on bits for left/right child.
-        // Advance depth by l=ceil(log(x)) levels, giving enough (2^l >= x) combinations of bit strings to fit all
-        // children. If l > 1, we pretend that there are separators of size 0 at levels in between. Those separators
-        // on the non-existing levels get sepSizeSum equal to the parent of the x children so numCommonHubsComputer
-        // correctly identifies the lowest common ancestor to be part of the parent.
-
-        // depthDelta = ceil(log(numChildren))
-        const uint32_t depthDelta = std::max(std::numeric_limits<uint32_t>::digits - numLeadingZeros(numChildren - 1), 1);
-
-        // Set sepSizeSum for empty levels (virtual empty separators):
-        for (uint32_t l = 1; l < depthDelta; ++l) {
-            const auto twoToTheL = (1 << l);
-            // Virtual level has twoToTheL virtual separator nodes. Compute their packedSideIds and according
-            // internal separator node indices, and set their sepSizeSum to that of the parent node (as their own
-            // separators are empty).
-            for (uint64_t idxInRelLevel = 0; idxInRelLevel < twoToTheL; ++idxInRelLevel) {
-                const uint64_t packedSideIdOfVirtualSepNode = packedSideIdAtNode | (idxInRelLevel << depth);
-                setSepSizeSum(depth + l, packedSideIdOfVirtualSepNode, sepSizeSumIncludingThis);
-            }
-        }
-
-        // Get packedIds for level depthDelta and shift by depth to the left to get masks for packed side IDs of
-        // children.
-        std::vector<uint64_t> childSideIdMasks = computePackedIdsOnLevel(depthDelta);
-        KASSERT(childSideIdMasks.size() >= numChildren);
-        for (auto &m: childSideIdMasks)
-            m <<= depth;
+        KASSERT(1 <= numChildren && numChildren <= 2);
 
         // For every child, call recursively with correct packed side ID
         uint32_t childIdx = 0;
         for (auto child = sd.leftChild(sdNode); child != 0; child = sd.rightSibling(child)) {
-            const uint64_t packedSideIdOfChild = packedSideIdAtNode | childSideIdMasks[childIdx];
-            initializeTreeHierarchy(sd, child, depth + depthDelta, packedSideIdOfChild, sepSizeSumIncludingThis);
+            const uint64_t childSideIdMask = childIdx == 0? 0 : 1 << depth;
+            const uint64_t packedSideIdOfChild = packedSideIdAtNode | childSideIdMask;
+            initializeTreeHierarchy(sd, child, depth + 1, packedSideIdOfChild, sepSizeSumIncludingThis);
             ++childIdx;
         }
-    }
-
-    // Computes a vector of packed side IDs for all nodes on given lvl if higher levels have less significant bits.
-    static std::vector<uint64_t> computePackedIdsOnLevel(const uint32_t lvl) {
-        KASSERT(lvl >= 1);
-        static std::vector<std::vector<uint64_t>> lookupTable = {
-                {0, 1}, // 0, 1
-                {0, 2, 1, 3}, // 00, 10, 01, 11
-                {0, 4, 2, 6, 1, 5, 3, 7} // 000, 100, 010, 110, 001, 101, 011, 111
-        };
-        if (lvl - 1 < lookupTable.size())
-            return lookupTable[lvl - 1];
-
-        std::vector<uint64_t> res;
-        computePackedIdsOnLevelRecursively(0, 0, lvl, res);
-        return res;
-    }
-
-    static void
-    computePackedIdsOnLevelRecursively(const uint32_t curLvl, const uint64_t curPackedId, const uint32_t tarLvl,
-                                       std::vector<uint64_t> &res) {
-        if (curLvl == tarLvl) {
-            res.push_back(curPackedId);
-            return;
-        }
-        computePackedIdsOnLevelRecursively(curLvl + 1, curPackedId, tarLvl, res); // Left child
-        computePackedIdsOnLevelRecursively(curLvl + 1, curPackedId & (1 << curLvl), tarLvl, res); // Right child
+        KASSERT(childIdx <= 2);
     }
 
     std::vector<uint32_t> numHubs; // For each vertex, stores number of hubs in label of vertex
     std::vector<uint64_t> packedSideIds; // store which side each vertex is on in each level of separator hierarchy
 
-
     // For each separator node, we have to store the sum of sizes of separators on the hierarchy branch up to the node.
     // These values need to be retrieved on the basis of a depth and the packedSideSum of the node.
-    // We can map depth and packedSideSum of a node to a unique value, however, this requires space in the order of
-    // 2^d where d is the depth of the tree hierarchy. This is only worth it for dense parts of the hierarchy, i.e.,
-    // levels at which most separator nodes exist. As the tree hierarchy may be highly skewed, this is not the case
-    // everywhere and the lower levels may be very sparse.
-    // Thus, we store values for a dense part of the hierarchy (up to level MAX_DENSE_LEVEL) in a full vector, and a
-    // sparse part (everything at lower levels) using hashing.
-    static constexpr size_t MAX_DENSE_LEVEL = 20;
+    // We map depth and packedSideSum of a node to a unique index and store the sep size sum at that index.
     std::vector<uint32_t> denseSepSizeSum;
-    std::unordered_map<uint64_t, uint32_t> sparseSepSizeSum;
-
-
 };
 

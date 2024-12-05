@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <vector>
 #include <kassert/kassert.hpp>
-#include <routingkit/nested_dissection.h>
+#include "DataStructures/Partitioning/nested_strict_dissection.h"
 
 #include "DataStructures/Graph/Graph.h"
 #include "DataStructures/Labels/BasicLabelSet.h"
@@ -14,7 +14,7 @@
 #include "Tools/Simd/AlignedVector.h"
 
 
-#include "Algorithms/TTL/TopologyCentricTreeHierarchy.h"
+#include "Algorithms/TTL/BalancedTopologyCentricTreeHierarchy.h"
 #include "Algorithms/TTL/TTLMetric.h"
 #include "Algorithms/TTL/TTLQuery.h"
 
@@ -36,7 +36,7 @@ namespace trafficassignment {
         class QueryAlgo {
         public:
             // Constructs a query algorithm instance working on the specified data.
-            QueryAlgo(const CCH &cch, const TopologyCentricTreeHierarchy &hierarchy, const TruncatedTreeLabelling &ttl,
+            QueryAlgo(const CCH &cch, const BalancedTopologyCentricTreeHierarchy &hierarchy, const TruncatedTreeLabelling &ttl,
                       AlignedVector<int> &flowsOnUpEdges, AlignedVector<int> &flowsOnDownEdges) :
                     inputGraph(inputGraph), cch(cch), ttlQuery(hierarchy, cch.getUpwardGraph(), ttl),
                     flowsOnUpEdges(flowsOnUpEdges),
@@ -135,12 +135,13 @@ namespace trafficassignment {
             }
 
             // Compute a separator decomposition for the input graph.
-            const auto graph = RoutingKit::make_graph_fragment(inputGraph.numVertices(), tails, heads);
-            auto computeSep = [&](const RoutingKit::GraphFragment &fragment) {
-                const auto cut = inertial_flow(fragment, 30, lats, lngs);
-                return derive_separator_from_cut(fragment, cut.is_node_on_side);
+            auto graph = RoutingKit::make_graph_fragment(inputGraph.numVertices(), tails, heads);
+            auto computeCut = [&](const RoutingKit::GraphFragment &fragment) {
+                return inertial_flow(fragment, 30, lats, lngs);
             };
-            const auto decomp = compute_separator_decomposition(graph, computeSep);
+            RoutingKit::BitVector all(graph.node_count(), true);
+            RoutingKit::BitVector none = ~all;
+            const auto decomp = compute_separator_decomposition_with_strict_dissection(std::move(graph), computeCut, std::move(none), std::move(all));
 
             // Convert the separator decomposition to our representation.
             SeparatorDecomposition sepDecomp;
@@ -192,7 +193,7 @@ namespace trafficassignment {
 
                     // Propagate upward flow on e to input edge if e is not an up shortcut or down into the
                     // lower triangle it shortcuts.
-                    if (flowsOnUpEdges[e] >= 0) {
+                    if (flowsOnUpEdges[e] > 0) {
                         int upInputEdge = INVALID_EDGE;
                         if (!isUpShortCut(e, upInputEdge)) {
                             // If e is not a shortcut edge in upwards direction, add its upward flow to the according
@@ -220,7 +221,7 @@ namespace trafficassignment {
 
                     // Propagate downward flow on e to input edge if e is not a down shortcut or down into the
                     // lower triangle it shortcuts.
-                    if (flowsOnDownEdges[e] >= 0) {
+                    if (flowsOnDownEdges[e] > 0) {
                         int downInputEdge = INVALID_EDGE;
                         if (!isDownShortCut(e, downInputEdge)) {
                             // If e is not a shortcut edge in downwards direction, add its downward flow to the according
@@ -275,7 +276,7 @@ namespace trafficassignment {
         }
 
         const InputGraphT &inputGraph; // The input graph in TA format.
-        TopologyCentricTreeHierarchy treeHierarchy; // Tree hierarchy underlying TTL
+        BalancedTopologyCentricTreeHierarchy treeHierarchy; // Tree hierarchy underlying TTL
         CCH cch;                      // The metric-independent CCH.
         TTLMetric metric;      // The current metric for the CCH.
         TruncatedTreeLabelling ttl;   // The customized tree labelling.

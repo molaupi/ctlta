@@ -5,7 +5,7 @@
 class TTLQuery {
 
 public:
-    TTLQuery(const TopologyCentricTreeHierarchy &hierarchy,
+    TTLQuery(const BalancedTopologyCentricTreeHierarchy &hierarchy,
              const CCH::UpGraph &cchUpGraph,
              const TruncatedTreeLabelling &ttl)
             : hierarchy(hierarchy), cchUpGraph(cchUpGraph), ttl(ttl) {}
@@ -17,7 +17,6 @@ public:
         lastS = s;
         lastT = t;
         for (uint32_t i = 0; i < hierarchy.getLowestCommonHub(s, t); ++i) {
-            KASSERT(ttl.upHub(s, i) == INFTY || ttl.downHub(t, i) == INFTY || ttl.upHub(s, i) == ttl.downHub(t, i));
             const int32_t distForHubI = ttl.upDist(s, i) + ttl.downDist(t, i);
             if (distForHubI < lastDistance) {
                 lastDistance = distForHubI;
@@ -70,7 +69,7 @@ private:
     std::vector<int32_t> lastUpPath;
     std::vector<int32_t> lastDownPath;
 
-    const TopologyCentricTreeHierarchy &hierarchy;
+    const BalancedTopologyCentricTreeHierarchy &hierarchy;
     const CCH::UpGraph &cchUpGraph;
     const TruncatedTreeLabelling &ttl;
 
