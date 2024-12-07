@@ -14,6 +14,7 @@ endif()
 option(TA_USE_CFW "Make each descent direction conjugate to the last direction." ON)
 option(TA_USE_SIMD_SEARCH "Use SIMD optimizations for the centralized shortest-path search." ON)
 set(TA_LOG_K "" CACHE STRING "Choose the number of simultaneous shortest-path computations.")
+set(TA_TTL_THETA "" CACHE STRING "Choose the maximum size of truncated subtrees int TruncatedTreeLabelling.")
 
 if(NOT TA_USE_CFW)
   target_compile_definitions(AssignTraffic PRIVATE TA_NO_CFW)
@@ -23,6 +24,9 @@ if(NOT TA_USE_SIMD_SEARCH)
 endif()
 if(NOT TA_LOG_K STREQUAL "")
   target_compile_definitions(AssignTraffic PRIVATE TA_LOG_K=${TA_LOG_K})
+endif()
+if(NOT TA_TTL_THETA STREQUAL "")
+  target_compile_definitions(AssignTraffic PRIVATE TA_TTL_THETA=${TA_TTL_THETA})
 endif()
 
 add_executable(

@@ -17,116 +17,136 @@
 // decrease-key operations on the priority queue. Depending on the used label set, it keeps parent
 // vertices and/or edges. The search can be used with different distance label containers and
 // priority queues. Moreover, the caller can provide an own pruning criterion.
-template <
-    typename GraphT, typename WeightT, typename LabelSetT,
-    typename PruningCriterionT = dij::NoCriterion,
-    template <typename> class DistanceLabelContainerT = StampedDistanceLabelContainer,
-    typename QueueT = AddressableQuadheap>
+template<
+        typename GraphT, typename LabelSetT,
+        typename PruningCriterionT = dij::NoCriterion,
+        template<typename> class DistanceLabelContainerT = StampedDistanceLabelContainer,
+        typename QueueT = AddressableQuadheap>
 class DagShortestPaths {
- public:
-  // Constructs a shortest-path search instance for the specified directed acyclic graph.
-  explicit DagShortestPaths(const GraphT& graph, PruningCriterionT pruneSearch = {})
-      : graph(graph),
-        distanceLabels(graph.numVertices()),
-        parent(graph),
-        queue(graph.numVertices()),
-        pruneSearch(pruneSearch) {}
 
-  // Runs a shortest-path search from s.
-  void run(const int s) {
-    runWithOffset(s, 0);
-  }
 
-  // Runs a shortest-path search from s to t.
-  void run(const int s, const int t) {
-    init(s);
-    while (!queue.empty()) {
-      if (queue.minId() == t)
-        break;
-      settleNextVertex();
+    // Called by the two public overloads of constructor for general graphs plus given edge weight and for CH search
+    // graphs.
+    DagShortestPaths(const GraphT &graph, int const *const edgeWeights, PruningCriterionT pruneSearch = {})
+            : graph(graph),
+              edgeWeights(edgeWeights),
+              distanceLabels(graph.numVertices()),
+              parent(graph),
+              queue(graph.numVertices()),
+              pruneSearch(pruneSearch) {}
+
+public:
+
+    // Constructs an DagShortesPaths search instance with given edge weights.
+    DagShortestPaths(const GraphT &graph,
+                                const std::vector<int> &edgeWeights,
+                                PruningCriterionT pruneSearch = {})
+            : DagShortestPaths(graph, edgeWeights.data(), pruneSearch) {
+        assert(graph.numEdges() == edgeWeights.size());
     }
-  }
 
-  // Runs a shortest-path search from s, with the distance of s initialized to the given offset.
-  void runWithOffset(const int s, const int offset) {
-    init(s, offset);
-    while (!queue.empty())
-      settleNextVertex();
-  }
+    // Constructor overload that uses the given edge weight attribute in the graph for edge weights.
+    template<typename WeightT>
+    DagShortestPaths(const GraphT &graph, PruningCriterionT pruneSearch = {})
+            : DagShortestPaths(graph, &graph.template get<WeightT>(0), pruneSearch) {}
 
-  // Returns the shortest-path distance to t.
-  int getDistance(const int t) {
-    return distanceLabels[t][0];
-  }
 
-  // Returns the parent vertex of v on the shortest path to v.
-  int getParentVertex(const int v) {
-    assert(distanceLabels[v][0] != INFTY);
-    return parent.getVertex(v);
-  }
-
-  // Returns the parent edge of v on the shortest path to v.
-  int getParentEdge(const int v) {
-    assert(distanceLabels[v][0] != INFTY);
-    return parent.getEdge(v);
-  }
-
-  // Returns the vertices on the shortest path to t in reverse order.
-  const std::vector<int32_t>& getReversePath(const int t) {
-    assert(distanceLabels[t][0] != INFTY);
-    return parent.getReversePath(t);
-  }
-
-  // Returns the edges on the shortest path to t in reverse order.
-  const std::vector<int32_t>& getReverseEdgePath(const int t) {
-    assert(distanceLabels[t][0] != INFTY);
-    return parent.getReverseEdgePath(t);
-  }
-
- private:
-  // Resets the distance labels and inserts the source into the queue.
-  void init(const int s, const int offset = 0) {
-    distanceLabels.init();
-    queue.clear();
-    distanceLabels[s] = offset;
-    parent.setVertex(s, s, true);
-    parent.setEdge(s, INVALID_EDGE, true);
-    queue.insert(s, s);
-  }
-
-  // Removes the next vertex from the queue, relaxes its outgoing edges, and returns its ID.
-  int settleNextVertex() {
-    int v, key;
-    queue.deleteMin(v, key);
-    auto& distToV = distanceLabels[v];
-
-    // Check whether the search can be pruned at v.
-    if (pruneSearch(v, distToV, distanceLabels))
-      return v;
-
-    // Relax all edges out of v.
-    FORALL_INCIDENT_EDGES(graph, v, e) {
-      const auto w = graph.edgeHead(e);
-      auto& distToW = distanceLabels[w];
-      const auto distViaV = distToV + graph.template get<WeightT>(e);
-      const auto mask = distViaV < distToW;
-      if (mask) {
-        distToW.min(distViaV);
-        parent.setVertex(w, v, mask);
-        parent.setEdge(w, e, mask);
-        if (!queue.contains(w))
-          queue.insert(w, w);
-      }
+    // Runs a shortest-path search from s.
+    void run(const int s) {
+        runWithOffset(s, 0);
     }
-    return v;
-  }
 
-  using DistanceLabelCont = DistanceLabelContainerT<typename LabelSetT::DistanceLabel>;
-  using ParentLabelCont = ParentLabelContainer<GraphT, LabelSetT>;
+    // Runs a shortest-path search from s to t.
+    void run(const int s, const int t) {
+        init(s);
+        while (!queue.empty()) {
+            if (queue.minId() == t)
+                break;
+            settleNextVertex();
+        }
+    }
 
-  const GraphT& graph;              // The graph (DAG) on which we compute shortest paths.
-  DistanceLabelCont distanceLabels; // The distance labels of the vertices.
-  ParentLabelCont parent;           // The parent information for each vertex.
-  QueueT queue;                     // The priority queue of unsettled vertices.
-  PruningCriterionT pruneSearch;    // The criterion used to prune the search.
+    // Runs a shortest-path search from s, with the distance of s initialized to the given offset.
+    void runWithOffset(const int s, const int offset) {
+        init(s, offset);
+        while (!queue.empty())
+            settleNextVertex();
+    }
+
+    // Returns the shortest-path distance to t.
+    int getDistance(const int t) {
+        return distanceLabels[t][0];
+    }
+
+    // Returns the parent vertex of v on the shortest path to v.
+    int getParentVertex(const int v) {
+        assert(distanceLabels[v][0] != INFTY);
+        return parent.getVertex(v);
+    }
+
+    // Returns the parent edge of v on the shortest path to v.
+    int getParentEdge(const int v) {
+        assert(distanceLabels[v][0] != INFTY);
+        return parent.getEdge(v);
+    }
+
+    // Returns the vertices on the shortest path to t in reverse order.
+    const std::vector<int32_t> &getReversePath(const int t) {
+        assert(distanceLabels[t][0] != INFTY);
+        return parent.getReversePath(t);
+    }
+
+    // Returns the edges on the shortest path to t in reverse order.
+    const std::vector<int32_t> &getReverseEdgePath(const int t) {
+        assert(distanceLabels[t][0] != INFTY);
+        return parent.getReverseEdgePath(t);
+    }
+
+private:
+    // Resets the distance labels and inserts the source into the queue.
+    void init(const int s, const int offset = 0) {
+        distanceLabels.init();
+        queue.clear();
+        distanceLabels[s] = offset;
+        parent.setVertex(s, s, true);
+        parent.setEdge(s, INVALID_EDGE, true);
+        queue.insert(s, s);
+    }
+
+    // Removes the next vertex from the queue, relaxes its outgoing edges, and returns its ID.
+    int settleNextVertex() {
+        int v, key;
+        queue.deleteMin(v, key);
+        auto &distToV = distanceLabels[v];
+
+        // Check whether the search can be pruned at v.
+        if (pruneSearch(v, distToV, distanceLabels))
+            return v;
+
+        // Relax all edges out of v.
+        FORALL_INCIDENT_EDGES(graph, v, e) {
+            const auto w = graph.edgeHead(e);
+            auto &distToW = distanceLabels[w];
+            const auto distViaV = distToV + edgeWeights[e];
+            const auto mask = distViaV < distToW;
+            if (mask) {
+                distToW.min(distViaV);
+                parent.setVertex(w, v, mask);
+                parent.setEdge(w, e, mask);
+                if (!queue.contains(w))
+                    queue.insert(w, w);
+            }
+        }
+        return v;
+    }
+
+    using DistanceLabelCont = DistanceLabelContainerT<typename LabelSetT::DistanceLabel>;
+    using ParentLabelCont = ParentLabelContainer<GraphT, LabelSetT>;
+
+    const GraphT &graph;              // The graph (DAG) on which we compute shortest paths.
+    int const *const edgeWeights;      // Weight on each edge
+    DistanceLabelCont distanceLabels; // The distance labels of the vertices.
+    ParentLabelCont parent;           // The parent information for each vertex.
+    QueueT queue;                     // The priority queue of unsettled vertices.
+    PruningCriterionT pruneSearch;    // The criterion used to prune the search.
 };

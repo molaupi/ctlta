@@ -20,13 +20,13 @@ public:
     }
 
     // Returns current weights on up edges of CCH.
-    const int32_t& getUpWeight(const int e) const {
-        return cchMetric.upWeights[e];
+    const std::vector<int32_t>& getUpWeights() const {
+        return cchMetric.upWeights;
     }
 
     // Returns current weights on up edges of CCH.
-    const int32_t& getDownWeight(const int e) const {
-        return cchMetric.downWeights[e];
+    const std::vector<int32_t>& getDownWeights() const {
+        return cchMetric.downWeights;
     }
 
 private:
@@ -34,6 +34,11 @@ private:
     void customizeLabelling(TruncatedTreeLabelling& ttl) {
         ttl.reset();
         cch.forEachVertexTopDown([&](const int32_t& u) {
+
+            // Do not build labels for truncated vertices.
+            if (hierarchy.isVertexTruncated(u))
+                return;
+
             const auto& numHubsU = hierarchy.getNumHubs()[u];
             ttl.upDist(u, numHubsU - 1) = 0; // distance to self
             ttl.upPathEdge(u, numHubsU - 1) = INVALID_EDGE; // edge to self

@@ -73,6 +73,12 @@ class BitVector {
 
   // Changes the number of bits in this bit vector. Newly inserted bits are initialized to init.
   void resize(const int size, const bool init = false) {
+      if (size == 0) {
+          numBits = 0;
+          blocks.clear();
+          return;
+      }
+
     const auto numUsedBits = numBits % BITS_PER_BLOCK;
     if (init && numUsedBits > 0)
       blocks.back() |= static_cast<Block>(-1) << numUsedBits;

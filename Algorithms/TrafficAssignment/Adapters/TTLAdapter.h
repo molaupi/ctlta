@@ -37,8 +37,9 @@ namespace trafficassignment {
         public:
             // Constructs a query algorithm instance working on the specified data.
             QueryAlgo(const CCH &cch, const BalancedTopologyCentricTreeHierarchy &hierarchy, const TruncatedTreeLabelling &ttl,
+                      const std::vector<int>& upEdgeWeights, const std::vector<int>& downEdgeWeights,
                       AlignedVector<int> &flowsOnUpEdges, AlignedVector<int> &flowsOnDownEdges) :
-                    inputGraph(inputGraph), cch(cch), ttlQuery(hierarchy, cch.getUpwardGraph(), ttl),
+                    cch(cch), ttlQuery(hierarchy, cch, ttl, upEdgeWeights, downEdgeWeights),
                     flowsOnUpEdges(flowsOnUpEdges),
                     flowsOnDownEdges(flowsOnDownEdges),
                     localFlowsOnUpEdges(flowsOnUpEdges.size(), 0),
@@ -98,7 +99,6 @@ namespace trafficassignment {
 
         private:
 
-            const InputGraphT &inputGraph; // The TA representation of the graph
             const CCH &cch;
             TTLQuery ttlQuery;
 
@@ -175,7 +175,7 @@ namespace trafficassignment {
 
         // Returns an instance of the query algorithm.
         QueryAlgo getQueryAlgoInstance() {
-            return {cch, treeHierarchy, ttl, flowsOnUpEdges, flowsOnDownEdges};
+            return {cch, treeHierarchy, ttl, metric.getUpWeights(), metric.getDownWeights(), flowsOnUpEdges, flowsOnDownEdges};
         }
 
         // Propagates the flows on the edges in the search graphs to the edges in the input graph.
@@ -186,6 +186,8 @@ namespace trafficassignment {
             // downward flow of e down into the lower triangles that e shortcuts (or add the flow to the corresponding
             // input edge if e is not a shortcut).
             const auto &cchGraph = cch.getUpwardGraph();
+            const auto& upWeights = metric.getUpWeights();
+            const auto& downWeights = metric.getDownWeights();
             cch.forEachVertexTopDown([&](const int &v) {
                 FORALL_INCIDENT_EDGES(cchGraph, v, e) {
                     const auto tail = cchGraph.edgeTail(e);
@@ -205,8 +207,7 @@ namespace trafficassignment {
                             // the upward flow of the middle edge in the triangle.
                             const auto noTriangleFound = cch.forEachLowerTriangle(
                                     tail, head, e, [&](int, const int lower, const int inter) {
-                                        if (metric.getDownWeight(lower) + metric.getUpWeight(inter) ==
-                                            metric.getUpWeight(e)) {
+                                        if (downWeights[lower] + upWeights[inter] == upWeights[e]) {
                                             flowsOnDownEdges[lower] += flowsOnUpEdges[e];
                                             flowsOnUpEdges[inter] += flowsOnUpEdges[e];
                                             return false;
@@ -233,8 +234,7 @@ namespace trafficassignment {
                             // the upward flow of the lower edge in the triangle.
                             const auto noTriangleFound = cch.forEachLowerTriangle(
                                     tail, head, e, [&](int, const int lower, const int inter) {
-                                        if (metric.getDownWeight(inter) + metric.getUpWeight(lower) ==
-                                            metric.getDownWeight(e)) {
+                                        if (downWeights[inter] + upWeights[lower] == downWeights[e] ) {
                                             flowsOnDownEdges[inter] += flowsOnDownEdges[e];
                                             flowsOnUpEdges[lower] += flowsOnDownEdges[e];
                                             return false;
@@ -255,7 +255,7 @@ namespace trafficassignment {
         // If e is not an upward shortcut edge, sets eInInputGraph to the according edge ID in the input graph.
         bool isUpShortCut(const int &e, int &eInInputGraph) {
             return cch.forEachUpwardInputEdge(e, [&](const int inputEdge) {
-                if (inputGraph.traversalCost(inputEdge) == metric.getUpWeight(e)) {
+                if (inputGraph.traversalCost(inputEdge) == metric.getUpWeights()[e]) {
                     eInInputGraph = inputEdge;
                     return false;
                 }
@@ -267,7 +267,7 @@ namespace trafficassignment {
         // If e is not a downward shortcut edge, sets eInInputGraph to the according edge ID in the input graph.
         bool isDownShortCut(const int &e, int &eInInputGraph) {
             return cch.forEachDownwardInputEdge(e, [&](const int inputEdge) {
-                if (inputGraph.traversalCost(inputEdge) == metric.getDownWeight(e)) {
+                if (inputGraph.traversalCost(inputEdge) == metric.getDownWeights()[e]) {
                     eInInputGraph = inputEdge;
                     return false;
                 }

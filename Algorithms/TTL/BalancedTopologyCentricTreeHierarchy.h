@@ -7,7 +7,13 @@
 #include "DataStructures/Partitioning/SeparatorTree.h"
 #include "Algorithms/CCH/CCHMetric.h"
 
+#ifndef TA_TTL_THETA
+#define TA_TTL_THETA 0
+#endif
+
 class BalancedTopologyCentricTreeHierarchy {
+
+    static constexpr uint32_t MaxTruncatedSubtreeSize = TA_TTL_THETA;
 
 public:
 
@@ -23,7 +29,7 @@ public:
         std::cout << "Depth of sepDecomp is " << sdDepth << std::endl;
 
         uint32_t maxUntruncatedDepth = 1;
-        const auto sdNodesToTruncateAt = getSepDecompNodesToTruncateAt(sepDecomp, 0, maxUntruncatedDepth);
+        const auto sdNodesToTruncateAt = getSepDecompNodesToTruncateAt(sepDecomp, MaxTruncatedSubtreeSize, maxUntruncatedDepth);
         std::cout << "Max depth of untruncated node in sepDecomp is " << maxUntruncatedDepth << std::endl;
 
         // Build labels and numCommonHubsComputer
@@ -31,6 +37,7 @@ public:
         sepSizeSum.clear();
         sepSizeSum.reserve((1 << (sdDepth + 1)));
         packedSideIds.resize(inputGraph.numVertices(), static_cast<uint64_t>(-1));
+        truncateVertex.resize(inputGraph.numVertices(), false);
 
         numHubs.resize(inputGraph.numVertices(), 0);
         initializeTreeHierarchy(sepDecomp, sdNodesToTruncateAt);
@@ -71,6 +78,11 @@ public:
         // Level of SH node is l. Packed side ID of LCA SH node is commonLowerBits.
         const auto &sepSizeSum = getSepSizeSum(l, commonLowerBits);
         return std::min(sepSizeSum, minNumHubs);
+    }
+
+    // Return whether vertex is truncated in which case it does not have a label.
+    bool isVertexTruncated(const int v) const {
+        return truncateVertex[v];
     }
 
 private:
@@ -213,6 +225,7 @@ private:
         // is used at all.
         if (truncateAtSdNode[0]) {
             std::fill(packedSideIds.begin(), packedSideIds.end(), 0);
+            truncateVertex = BitVector(truncateVertex.size(), true);
             return;
         }
 
@@ -245,14 +258,16 @@ private:
             }
 
             if (truncateAtSdNode[child]) {
-                // If child is truncated, the vertices in the subtree rooted at child will have no labels, which means
-                // they will have numHubs[v] = 0 and the sum of separator sizes on the branch is irrelevant. Set only the
-                // side IDs of vertices.
-                for (auto v = sd.lastSeparatorVertex(child) - 1; v >= sd.firstSeparatorVertex(child); --v)
+                // If child is truncated, the vertices in the subtree rooted at child will have no labels.
+                // Set numHubs to sum of separator sizes up to lowest non-truncated ancestor (number at top of stack)
+                // and set packedSideId. Mark vertices as truncated.
+                for (auto v = sd.lastSeparatorVertex(child) - 1; v >= sd.firstSeparatorVertex(child); --v) {
+                    numHubs[v] = sepSizeSumsOnBranch.top();
                     packedSideIds[v] = packedSideId;
+                    truncateVertex[v] = true;
+                }
             } else {
                 // If child is not truncated, set number of hubs and side IDs for separator vertices at child.
-
                 const auto sepSumSizeOnBranchUntilParent = sepSizeSumsOnBranch.top();
                 uint32_t inSepIdx = 0;
                 for (auto v = sd.lastSeparatorVertex(child) - 1; v >= sd.firstSeparatorVertex(child); --v) {
@@ -299,6 +314,7 @@ private:
 
     std::vector<uint32_t> numHubs; // For each vertex, stores number of hubs in label of vertex
     std::vector<uint64_t> packedSideIds; // store which side each vertex is on in each level of separator hierarchy
+    BitVector truncateVertex; // If truncateVertex[v], vertex v is truncated and should not get a label
 
     // For each separator node, we have to store the sum of sizes of separators on the hierarchy branch up to the node.
     // These values need to be retrieved on the basis of a depth and the packedSideSum of the node.
