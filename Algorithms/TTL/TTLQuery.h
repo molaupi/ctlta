@@ -17,22 +17,22 @@ class TTLQuery {
         }
 
         const int32_t &dist(const uint32_t &hubIdx) const {
-            KASSERT(hubIdx < dists.size());
+            KASSERT(hubIdx < numHubs());
             return dists[hubIdx];
         }
 
         int32_t &dist(const uint32_t &hubIdx) {
-            KASSERT(hubIdx < dists.size());
+            KASSERT(hubIdx < numHubs());
             return dists[hubIdx];
         }
 
         const int32_t &accessVertex(const uint32_t &hubIdx) const {
-            KASSERT(hubIdx < dists.size());
+            KASSERT(hubIdx < numHubs());
             return accessVertices[hubIdx];
         }
 
         int32_t &accessVertex(const uint32_t &hubIdx) {
-            KASSERT(hubIdx < dists.size());
+            KASSERT(hubIdx < numHubs());
             return accessVertices[hubIdx];
         }
 
@@ -66,7 +66,8 @@ class TTLQuery {
 
             // Update temporary label of source / target with label of v.
             const auto labelOfV = UP ? ttl.upLabel(v) : ttl.downLabel(v);
-            for (auto i = 0; i < std::min(temporaryLabel.numHubs(), hierarchy.getNumHubs()[v]); ++i) {
+            const auto maxHub = std::min(temporaryLabel.numHubs(), hierarchy.getNumHubs()[v]);
+            for (auto i = 0; i < maxHub; ++i) {
                 const auto distViaV = distToV[0] + labelOfV.dist(i);
                 if (distViaV < temporaryLabel.dist(i)) {
                     temporaryLabel.dist(i) = distViaV;
