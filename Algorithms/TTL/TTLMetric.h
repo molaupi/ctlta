@@ -33,33 +33,43 @@ private:
 
     void customizeLabelling(TruncatedTreeLabelling& ttl) {
         ttl.reset();
+        const auto& cchGraph = cch.getUpwardGraph();
+        const auto& upWeights = cchMetric.upWeights;
+        const auto& downWeights = cchMetric.downWeights;
+        const auto& numHubs = hierarchy.getNumHubs();
+#pragma omp parallel // parallelizes callbacks within cch.forEachVertexTopDown.
+#pragma omp single nowait
         cch.forEachVertexTopDown([&](const int32_t& u) {
 
             // Do not build labels for truncated vertices.
             if (hierarchy.isVertexTruncated(u))
                 return;
 
-            const auto& numHubsU = hierarchy.getNumHubs()[u];
+            const auto numHubsU = numHubs[u];
             ttl.upDist(u, numHubsU - 1) = 0; // distance to self
             ttl.upPathEdge(u, numHubsU - 1) = INVALID_EDGE; // edge to self
             ttl.downDist(u, numHubsU - 1) = 0; // distance to self
             ttl.downPathEdge(u, numHubsU - 1) = INVALID_EDGE; // edge to self
-            FORALL_INCIDENT_EDGES(cch.getUpwardGraph(), u, e) {
-                const auto v = cch.getUpwardGraph().edgeHead(e);
-                const auto& numHubsV = hierarchy.getNumHubs()[v];
-                const auto& upWeight = cchMetric.upWeights[e];
-                const auto& downWeight = cchMetric.downWeights[e];
+            FORALL_INCIDENT_EDGES(cchGraph, u, e) {
+                const auto v = cchGraph.edgeHead(e);
+                const auto upWeight = upWeights[e];
+                const auto downWeight = downWeights[e];
+                const auto numHubsV = numHubs[v];
                 KASSERT(numHubsV < numHubsU);
-                const auto lch = hierarchy.getLowestCommonHub(u, v);
+                KASSERT(numHubsV == hierarchy.getLowestCommonHub(u, v));
                 // TODO: SIMD-ify
-                for (uint32_t i = 0; i < lch; ++i) {
-                    if (ttl.upDist(u, i) > upWeight + ttl.upDist(v, i)) {
-                        ttl.upDist(u, i) = upWeight + ttl.upDist(v, i);
-                        ttl.upPathEdge(u, i) = e;
+                auto uUpLabel = ttl.upLabel(u);
+                auto uDownLabel = ttl.downLabel(u);
+                const auto vUpLabel = ttl.cUpLabel(v);
+                const auto vDownLabel = ttl.cDownLabel(v);
+                for (uint32_t i = 0; i < numHubsV; ++i) {
+                    if (uUpLabel.dist(i) > upWeight + vUpLabel.dist(i)) {
+                        uUpLabel.dist(i) = upWeight + vUpLabel.dist(i);
+                        uUpLabel.pathEdge(i) = e;
                     }
-                    if (ttl.downDist(u, i) > downWeight + ttl.downDist(v, i)) {
-                        ttl.downDist(u, i) = downWeight + ttl.downDist(v, i);
-                        ttl.downPathEdge(u, i) = e;
+                    if (uDownLabel.dist(i) > downWeight + vDownLabel.dist(i)) {
+                        uDownLabel.dist(i) = downWeight + vDownLabel.dist(i);
+                        uDownLabel.pathEdge(i) = e;
                     }
                 }
             }

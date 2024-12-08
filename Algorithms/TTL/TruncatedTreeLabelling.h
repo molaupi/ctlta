@@ -24,6 +24,31 @@ public:
         uint32_t numHubs;
     };
 
+    struct Label {
+        const int32_t& dist(const uint32_t& hubIdx) const {
+            KASSERT(hubIdx < numHubs);
+            return startOfLabel[hubIdx];
+        }
+
+        inline int32_t& dist(const uint32_t& hubIdx) {
+            KASSERT(hubIdx < numHubs);
+            return startOfLabel[hubIdx];
+        }
+
+        const int32_t& pathEdge(const uint32_t& hubIdx) const {
+            KASSERT(hubIdx < numHubs);
+            return startOfLabel[numHubs + hubIdx];
+        }
+
+        inline int32_t& pathEdge(const uint32_t& hubIdx) {
+            KASSERT(hubIdx < numHubs);
+            return startOfLabel[numHubs + hubIdx];
+        }
+
+        int32_t *startOfLabel;
+        uint32_t numHubs;
+    };
+
 
     TruncatedTreeLabelling(const BalancedTopologyCentricTreeHierarchy &hierarchy)
             : hierarchy(hierarchy), upLabelData(), downLabelData() {}
@@ -54,9 +79,29 @@ public:
         return ConstLabel(upLabelData.data() + labelOffsets[v], hierarchy.getNumHubs()[v]);
     }
 
+    ConstLabel cUpLabel(const int32_t& v) const {
+        KASSERT(labelOffsets[v] != INVALID_OFFSET);
+        return ConstLabel(upLabelData.data() + labelOffsets[v], hierarchy.getNumHubs()[v]);
+    }
+
+    Label upLabel(const int32_t& v) {
+        KASSERT(labelOffsets[v] != INVALID_OFFSET);
+        return Label(upLabelData.data() + labelOffsets[v], hierarchy.getNumHubs()[v]);
+    }
+
     ConstLabel downLabel(const int32_t& v) const {
         KASSERT(labelOffsets[v] != INVALID_OFFSET);
         return ConstLabel(downLabelData.data() + labelOffsets[v], hierarchy.getNumHubs()[v]);
+    }
+
+    ConstLabel cDownLabel(const int32_t& v) const {
+        KASSERT(labelOffsets[v] != INVALID_OFFSET);
+        return ConstLabel(downLabelData.data() + labelOffsets[v], hierarchy.getNumHubs()[v]);
+    }
+
+    Label downLabel(const int32_t& v) {
+        KASSERT(labelOffsets[v] != INVALID_OFFSET);
+        return Label(downLabelData.data() + labelOffsets[v], hierarchy.getNumHubs()[v]);
     }
 
 
