@@ -199,8 +199,11 @@ namespace trafficassignment {
         // Propagates the flows on the edges in the search graphs to the edges in the input graph using stored
         // unpacking information. Only enabled if SearchGraphT provides this information for each edge as attribute.
         template<typename SearchGraphT, typename std::enable_if<SearchGraphT::template has<UnpackingInfoAttribute>()>::type...>
-        void propagateFlowsToInputEdgesImpl(AlignedVector<int> &flowsOnInputEdges, const SearchGraphT& upGraph, const SearchGraphT& downGraph) {
-            for (auto u = inputGraph.numVertices() - 1; u >= 0; --u) {
+        void propagateFlowsToInputEdgesImpl(AlignedVector<int> &flowsOnInputEdges, const SearchGraphT &upGraph,
+                                            const SearchGraphT &downGraph) {
+#pragma omp parallel // parallelizes callbacks within cch.forEachVertexTopDown.
+#pragma omp single nowait
+            cch.forEachVertexTopDown([&](const int &u) {
                 FORALL_INCIDENT_EDGES(upGraph, u, e)
                     if (upGraph.unpackingInfo(e).second == INVALID_EDGE) {
                         flowsOnInputEdges[upGraph.unpackingInfo(e).first] = flowsOnUpEdges[e];
@@ -215,14 +218,15 @@ namespace trafficassignment {
                         flowsOnDownEdges[downGraph.unpackingInfo(e).first] += flowsOnDownEdges[e];
                         flowsOnUpEdges[downGraph.unpackingInfo(e).second] += flowsOnDownEdges[e];
                     }
-            }
+            });
         }
 
 
         // Propagates the flows on the edges in the search graphs to the edges in the input graph by explicitly
         // finding the edges that comprise each shortcut edge. Only has to unpack each edge like this once.
         template<typename SearchGraphT, typename std::enable_if<!SearchGraphT::template has<UnpackingInfoAttribute>()>::type...>
-        void propagateFlowsToInputEdgesImpl(AlignedVector<int> &flowsOnInputEdges, const SearchGraphT& upGraph, const SearchGraphT& downGraph) {
+        void propagateFlowsToInputEdgesImpl(AlignedVector<int> &flowsOnInputEdges, const SearchGraphT &upGraph,
+                                            const SearchGraphT &downGraph) {
             // If the search graph has no known unpacking information, we compute the unpacking by
             // identifying the shortcuts explicitly by weight.
             // For each vertex v in top-down order and for each upward edge e out of v, we propagate the upward and
@@ -230,8 +234,8 @@ namespace trafficassignment {
             // input edge if e is not a shortcut).
             const auto &upWeights = metric.upwardWeights();
             const auto &downWeights = metric.downwardWeights();
-            #pragma omp parallel // parallelizes callbacks within cch.forEachVertexTopDown.
-            #pragma omp single nowait
+#pragma omp parallel // parallelizes callbacks within cch.forEachVertexTopDown.
+#pragma omp single nowait
             cch.forEachVertexTopDown([&](const int &v) {
                 FORALL_INCIDENT_EDGES(upGraph, v, e) {
                     const auto tail = upGraph.edgeTail(e);
