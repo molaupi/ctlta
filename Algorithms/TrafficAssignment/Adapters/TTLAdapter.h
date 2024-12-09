@@ -104,7 +104,9 @@ namespace trafficassignment {
                 FORALL_EDGES(upGraph, e) {
                     flowsOnUpEdges[e] += localFlowsOnUpEdges[e];
                 }
-                FORALL_EDGES(downGraph, e)flowsOnDownEdges[e] += localFlowsOnDownEdges[e];
+                FORALL_EDGES(downGraph, e) {
+                    flowsOnDownEdges[e] += localFlowsOnDownEdges[e];
+                }
             }
 
         private:
@@ -204,15 +206,13 @@ namespace trafficassignment {
 #pragma omp parallel // parallelizes callbacks within cch.forEachVertexTopDown.
 #pragma omp single nowait
             cch.forEachVertexTopDown([&](const int &u) {
-                FORALL_INCIDENT_EDGES(upGraph, u, e)
-                    if (upGraph.unpackingInfo(e).second == INVALID_EDGE) {
+                FORALL_INCIDENT_EDGES(upGraph, u, e)if (upGraph.unpackingInfo(e).second == INVALID_EDGE) {
                         flowsOnInputEdges[upGraph.unpackingInfo(e).first] = flowsOnUpEdges[e];
                     } else {
                         flowsOnDownEdges[upGraph.unpackingInfo(e).first] += flowsOnUpEdges[e];
                         flowsOnUpEdges[upGraph.unpackingInfo(e).second] += flowsOnUpEdges[e];
                     }
-                FORALL_INCIDENT_EDGES(downGraph, u, e)
-                    if (downGraph.unpackingInfo(e).second == INVALID_EDGE) {
+                FORALL_INCIDENT_EDGES(downGraph, u, e)if (downGraph.unpackingInfo(e).second == INVALID_EDGE) {
                         flowsOnInputEdges[downGraph.unpackingInfo(e).first] = flowsOnDownEdges[e];
                     } else {
                         flowsOnDownEdges[downGraph.unpackingInfo(e).first] += flowsOnDownEdges[e];

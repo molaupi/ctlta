@@ -1,5 +1,6 @@
 #pragma once
 
+#include "DataStructures/Labels/BasicLabelSet.h"
 #include "Algorithms/TTL/TruncatedTreeLabelling.h"
 #include "Algorithms/Dijkstra/DagShortestPaths.h"
 

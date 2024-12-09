@@ -28,6 +28,7 @@
 #include "DataStructures/Labels/BasicLabelSet.h"
 #include "DataStructures/Labels/ParentInfo.h"
 #include "DataStructures/Partitioning/SeparatorDecomposition.h"
+#include "DataStructures/Partitioning/nested_strict_dissection.h"
 #include "Tools/CommandLine/CommandLineParser.h"
 #include "Tools/StringHelpers.h"
 #include "Tools/Timer.h"
@@ -43,6 +44,7 @@ inline void printUsage() {
       "       RunP2PAlgo -a Bi-Dij     -o <file> -g <file> -d <file>\n"
       "       RunP2PAlgo -a CH         -o <file> -h <file> -d <file>\n"
       "       RunP2PAlgo -a CCH-Dij    -o <file> -g <file> -d <file> -s <file>\n"
+      "       RunP2PAlgo -a CCH-tree   -o <file> -g <file> -d <file> -s <file>\n"
       "       RunP2PAlgo -a CCH-tree   -o <file> -g <file> -d <file> -s <file>\n\n"
 
       "Runs the preprocessing, customization or query phase of various point-to-point\n"
@@ -278,14 +280,19 @@ inline void runQueries(const CommandLineParser& clp) {
       TruncatedTreeLabelling ttl(treeHierarchy);
       ttl.init();
 
-      TTLMetric metric(treeHierarchy, cch, useLengths? &graph.length(0) : &graph.travelTime(0));
+
+
+                TTLMetric<> metric(treeHierarchy, cch, useLengths? &graph.length(0) : &graph.travelTime(0));
       metric.buildCustomizedTTL(ttl);
 
       outputFile << "# Graph: " << graphFileName << '\n';
       outputFile << "# Separator: " << sepFileName << '\n';
       outputFile << "# OD pairs: " << demandFileName << '\n';
+      static constexpr uint64_t BYTES_PER_MB = 1 << 20;
+      outputFile << "# Mem hierarchy = " << treeHierarchy.sizeInBytes() / BYTES_PER_MB << " MB, Mem labelling = " << ttl.sizeInBytes() / BYTES_PER_MB << " MB" << '\n';
 
-      TTLQuery algo(treeHierarchy, cch.getUpwardGraph(), ttl);
+      TTLQuery<TTLMetric<>::SearchGraph> algo(treeHierarchy, metric.upwardGraph(), metric.downwardGraph(), metric.upwardWeights(),
+                                              metric.downwardWeights(), ttl);
       runQueries(algo, demandFileName, outputFile, [&](const int v) { return cch.getRanks()[v]; });
   } else {
 
@@ -313,6 +320,8 @@ inline void runPreprocessing(const CommandLineParser& clp) {
   if (useLengths)
     FORALL_EDGES(graph, e)
       graph.travelTime(e) = graph.length(e);
+
+  std::cout << "Graph has " << graph.numVertices() << " vertices and " << graph.numEdges() << " edges" << std::endl;
 
   if (algorithmName == "CH") {
 
@@ -418,6 +427,53 @@ inline void runPreprocessing(const CommandLineParser& clp) {
       outputFile << basicCustom << ',' << perfectCustom << ',' << construct << ',' << tot << '\n';
     }
 
+  } else if (algorithmName == "TTL") {
+      // Run the preprocessing phase of TTL.
+      if (imbalance < 0)
+          throw std::invalid_argument("invalid imbalance -- '" + std::to_string(imbalance) + "'");
+
+      // Convert the input graph to RoutingKit's graph representation.
+      std::vector<float> lats(graph.numVertices());
+      std::vector<float> lngs(graph.numVertices());
+      std::vector<unsigned int> tails(graph.numEdges());
+      std::vector<unsigned int> heads(graph.numEdges());
+      FORALL_VERTICES(graph, u) {
+          lats[u] = graph.latLng(u).latInDeg();
+          lngs[u] = graph.latLng(u).lngInDeg();
+          FORALL_INCIDENT_EDGES(graph, u, e) {
+              tails[e] = u;
+              heads[e] = graph.edgeHead(e);
+          }
+      }
+
+      // Compute a strict bisection separator decomposition for the input graph.
+      auto fragment = RoutingKit::make_graph_fragment(graph.numVertices(), tails, heads);
+      auto computeCut = [&](const RoutingKit::GraphFragment &fragment) {
+          return inertial_flow(fragment, imbalance, lats, lngs);
+      };
+      RoutingKit::BitVector all(fragment.node_count(), true);
+      RoutingKit::BitVector none = ~all;
+      const auto decomp = compute_separator_decomposition_with_strict_dissection(std::move(fragment), computeCut,
+                                                                                 std::move(none), std::move(all));
+
+      // Convert the separator decomposition to our representation.
+      SeparatorDecomposition sepDecomp;
+      for (const auto& n : decomp.tree) {
+          SeparatorDecomposition::Node node;
+          node.leftChild = n.left_child;
+          node.rightSibling = n.right_sibling;
+          node.firstSeparatorVertex = n.first_separator_vertex;
+          node.lastSeparatorVertex = n.last_separator_vertex;
+          sepDecomp.tree.push_back(node);
+      }
+      sepDecomp.order.assign(decomp.order.begin(), decomp.order.end());
+
+      if (!endsWith(outputFileName, ".strict_bisep.bin"))
+          outputFileName += ".strict_bisep.bin";
+      std::ofstream outputFile(outputFileName, std::ios::binary);
+      if (!outputFile.good())
+          throw std::invalid_argument("file cannot be opened -- '" + outputFileName);
+      sepDecomp.writeTo(outputFile);
   } else {
 
     throw std::invalid_argument("invalid P2P algorithm -- '" + algorithmName + "'");

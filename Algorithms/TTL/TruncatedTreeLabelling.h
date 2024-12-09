@@ -10,12 +10,12 @@ public:
 
     struct ConstLabel {
 
-        const int32_t& dist(const uint32_t& hubIdx) const {
+        const int32_t &dist(const uint32_t &hubIdx) const {
             KASSERT(hubIdx < numHubs);
             return startOfLabel[hubIdx];
         }
 
-        const int32_t& pathEdge(const uint32_t& hubIdx) const {
+        const int32_t &pathEdge(const uint32_t &hubIdx) const {
             KASSERT(hubIdx < numHubs);
             return startOfLabel[numHubs + hubIdx];
         }
@@ -25,22 +25,22 @@ public:
     };
 
     struct Label {
-        const int32_t& dist(const uint32_t& hubIdx) const {
+        const int32_t &dist(const uint32_t &hubIdx) const {
             KASSERT(hubIdx < numHubs);
             return startOfLabel[hubIdx];
         }
 
-        inline int32_t& dist(const uint32_t& hubIdx) {
+        inline int32_t &dist(const uint32_t &hubIdx) {
             KASSERT(hubIdx < numHubs);
             return startOfLabel[hubIdx];
         }
 
-        const int32_t& pathEdge(const uint32_t& hubIdx) const {
+        const int32_t &pathEdge(const uint32_t &hubIdx) const {
             KASSERT(hubIdx < numHubs);
             return startOfLabel[numHubs + hubIdx];
         }
 
-        inline int32_t& pathEdge(const uint32_t& hubIdx) {
+        inline int32_t &pathEdge(const uint32_t &hubIdx) {
             KASSERT(hubIdx < numHubs);
             return startOfLabel[numHubs + hubIdx];
         }
@@ -74,32 +74,32 @@ public:
         std::fill(downLabelData.begin(), downLabelData.end(), INFTY);
     }
 
-    ConstLabel upLabel(const int32_t& v) const {
+    ConstLabel upLabel(const int32_t &v) const {
         KASSERT(labelOffsets[v] != INVALID_OFFSET);
         return ConstLabel(upLabelData.data() + labelOffsets[v], hierarchy.getNumHubs()[v]);
     }
 
-    ConstLabel cUpLabel(const int32_t& v) const {
+    ConstLabel cUpLabel(const int32_t &v) const {
         KASSERT(labelOffsets[v] != INVALID_OFFSET);
         return ConstLabel(upLabelData.data() + labelOffsets[v], hierarchy.getNumHubs()[v]);
     }
 
-    Label upLabel(const int32_t& v) {
+    Label upLabel(const int32_t &v) {
         KASSERT(labelOffsets[v] != INVALID_OFFSET);
         return Label(upLabelData.data() + labelOffsets[v], hierarchy.getNumHubs()[v]);
     }
 
-    ConstLabel downLabel(const int32_t& v) const {
+    ConstLabel downLabel(const int32_t &v) const {
         KASSERT(labelOffsets[v] != INVALID_OFFSET);
         return ConstLabel(downLabelData.data() + labelOffsets[v], hierarchy.getNumHubs()[v]);
     }
 
-    ConstLabel cDownLabel(const int32_t& v) const {
+    ConstLabel cDownLabel(const int32_t &v) const {
         KASSERT(labelOffsets[v] != INVALID_OFFSET);
         return ConstLabel(downLabelData.data() + labelOffsets[v], hierarchy.getNumHubs()[v]);
     }
 
-    Label downLabel(const int32_t& v) {
+    Label downLabel(const int32_t &v) {
         KASSERT(labelOffsets[v] != INVALID_OFFSET);
         return Label(downLabelData.data() + labelOffsets[v], hierarchy.getNumHubs()[v]);
     }
@@ -151,9 +151,15 @@ public:
                 continue;
             for (auto i = 0; i < hierarchy.getNumHubs()[v]; ++i) {
                 KASSERT(!(upDist(v, i) == INFTY || upPathEdge(v, i) == INFTY || downDist(v, i) == INFTY ||
-                    downPathEdge(v, i) == INFTY));
+                          downPathEdge(v, i) == INFTY));
             }
         }
+    }
+
+    uint64_t sizeInBytes() const {
+        return labelOffsets.size() * sizeof(decltype(labelOffsets)::value_type)
+               + upLabelData.size() * sizeof(decltype(upLabelData)::value_type)
+               + downLabelData.size() * sizeof(decltype(downLabelData)::value_type);
     }
 
 private:

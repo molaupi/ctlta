@@ -22,14 +22,17 @@ public:
     // Builds the metric-independent CCH for the specified graph and separator decomposition.
     template<typename InputGraphT>
     void preprocess(const InputGraphT &inputGraph, const SeparatorDecomposition &sepDecomp) {
-        if (!hasStrictDissectionStructure(sepDecomp))
-            throw std::invalid_argument("BalancedTopologyCentricTreeHierarchy requires strict dissection "
-                                        "structure of separator decomposition.");
+
         const auto sdDepth = computeSepDecompDepth(sepDecomp);
         std::cout << "Depth of sepDecomp is " << sdDepth << std::endl;
 
+        if (!hasStrictDissectionStructure(sepDecomp))
+            throw std::invalid_argument("BalancedTopologyCentricTreeHierarchy requires strict dissection "
+                                        "structure of separator decomposition.");
+
         uint32_t maxUntruncatedDepth = 1;
-        const auto sdNodesToTruncateAt = getSepDecompNodesToTruncateAt(sepDecomp, MaxTruncatedSubtreeSize, maxUntruncatedDepth);
+        const auto sdNodesToTruncateAt = getSepDecompNodesToTruncateAt(sepDecomp, MaxTruncatedSubtreeSize,
+                                                                       maxUntruncatedDepth);
         std::cout << "Max depth of untruncated node in sepDecomp is " << maxUntruncatedDepth << std::endl;
 
         // Build labels and numCommonHubsComputer
@@ -83,6 +86,13 @@ public:
     // Return whether vertex is truncated in which case it does not have a label.
     bool isVertexTruncated(const int v) const {
         return truncateVertex[v];
+    }
+
+    uint64_t sizeInBytes() const {
+        return numHubs.size() * sizeof(decltype(numHubs)::value_type) +
+               packedSideIds.size() * sizeof(decltype(packedSideIds)::value_type) +
+               truncateVertex.numBlocks() * sizeof(BitVector::Block) +
+               sepSizeSum.size() * sizeof(decltype(sepSizeSum)::value_type);
     }
 
 private:
@@ -146,7 +156,8 @@ private:
     // Traverses separator decomposition and computes nodes to truncate at s.t. the number of vertices in the subtree
     // rooted at each marked node is at most theta. Also sets maximum depth of an untruncated node.
     static BitVector
-    getSepDecompNodesToTruncateAt(const SeparatorDecomposition &sd, const uint32_t theta, uint32_t& maxUntruncatedDepth) {
+    getSepDecompNodesToTruncateAt(const SeparatorDecomposition &sd, const uint32_t theta,
+                                  uint32_t &maxUntruncatedDepth) {
         BitVector doTruncate(sd.tree.size());
         std::stack<uint32_t> numVerticesOnBranch;
         numVerticesOnBranch.push(0);

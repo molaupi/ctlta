@@ -26,6 +26,7 @@ target_link_libraries(GenerateMatchingODPairs ${RoutingKit_LIBRARY})
 
 add_executable(GenerateODPairs GenerateODPairs.cc)
 target_compile_definitions(GenerateODPairs PRIVATE CSV_IO_NO_THREAD)
+target_link_libraries(GenerateODPairs routingkit kassert rapidxml vectorclass fast_cpp_csv_parser)
 if(OpenMP_FOUND)
   target_link_libraries(GenerateODPairs OpenMP::OpenMP_CXX)
 endif()
