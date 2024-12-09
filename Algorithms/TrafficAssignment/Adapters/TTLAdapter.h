@@ -230,6 +230,8 @@ namespace trafficassignment {
             // input edge if e is not a shortcut).
             const auto &upWeights = metric.upwardWeights();
             const auto &downWeights = metric.downwardWeights();
+            #pragma omp parallel // parallelizes callbacks within cch.forEachVertexTopDown.
+            #pragma omp single nowait
             cch.forEachVertexTopDown([&](const int &v) {
                 FORALL_INCIDENT_EDGES(upGraph, v, e) {
                     const auto tail = upGraph.edgeTail(e);
