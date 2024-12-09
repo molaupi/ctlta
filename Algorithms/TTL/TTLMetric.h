@@ -4,47 +4,79 @@
 #include "Algorithms/TTL/BalancedTopologyCentricTreeHierarchy.h"
 #include "Algorithms/CCH/CCHMetric.h"
 
+#ifndef TTL_USE_PERFECT_CUSTOMIZATION
+#define TTL_USE_PERFECT_CUSTOMIZATION false
+#endif
+
+
 // An individual metric for truncated tree labelling. Uses a CCH to build customized hub labelling.
+template<bool USE_PERFECT_CUSTOMIZATION = TTL_USE_PERFECT_CUSTOMIZATION>
 class TTLMetric {
 
 public:
 
+    using SearchGraph = std::conditional_t<USE_PERFECT_CUSTOMIZATION, CH::SearchGraph, CCH::UpGraph>;
+
     // Constructs an individual metric incorporating the specified input weights in the specified
     // BalancedTopologyCentricTreeHierarchy on the basis of the specified CCH.
-    TTLMetric(const BalancedTopologyCentricTreeHierarchy& hierarchy, const CCH& cch, const int32_t* const inputWeights)
+    TTLMetric(const BalancedTopologyCentricTreeHierarchy &hierarchy, const CCH &cch, const int32_t *const inputWeights)
             : hierarchy(hierarchy), cch(cch), cchMetric(cch, inputWeights), minimumWeightedCH() {}
 
-    void buildCustomizedTTL(TruncatedTreeLabelling& ttl) {
-        minimumWeightedCH = cchMetric.buildMinimumWeightedCH();
+    void buildCustomizedTTL(TruncatedTreeLabelling &ttl) {
+        if constexpr (USE_PERFECT_CUSTOMIZATION)
+            minimumWeightedCH = cchMetric.buildMinimumWeightedCH();
+        else
+            cchMetric.customize();
         customizeLabelling(ttl);
     }
 
-//    // Returns current weights on up edges of CCH.
-//    const std::vector<int32_t>& getUpWeights() const {
-//        return cchMetric.upWeights;
-//    }
-//
-//    // Returns current weights on up edges of CCH.
-//    const std::vector<int32_t>& getDownWeights() const {
-//        return cchMetric.downWeights;
-//    }
+    // Returns the upward graph of the metric, which is either the CCH graph or the upward graph after perfect
+    // customization.
+    const SearchGraph &upwardGraph() const {
+        if constexpr (USE_PERFECT_CUSTOMIZATION)
+            return minimumWeightedCH.upwardGraph();
+        else
+            return cch.getUpwardGraph();
+    }
 
-    // Returns reference to minimum weighted CH. Only call after buildCustomizedTTL.
-    const CH& getMinimumWeightedCH() const {
-        return minimumWeightedCH;
+    // Returns the downward graph of the metric, which is either the CCH graph or the downward graph after perfect
+    // customization.
+    const SearchGraph &downwardGraph() const {
+        if constexpr (USE_PERFECT_CUSTOMIZATION)
+            return minimumWeightedCH.downwardGraph();
+        else
+            return cch.getUpwardGraph();
+    }
+
+    // Returns current weights on edges of upward graph.
+    const int *const upwardWeights() const {
+        if constexpr (USE_PERFECT_CUSTOMIZATION)
+            return &minimumWeightedCH.upwardGraph().template get<CH::Weight>(0);
+        else
+            return cchMetric.upWeights.data();
+    }
+
+    // Returns current weights on edges of downward graph.
+    const int *const downwardWeights() const {
+        if constexpr (USE_PERFECT_CUSTOMIZATION)
+            return &minimumWeightedCH.downwardGraph().template get<CH::Weight>(0);
+        else
+            return cchMetric.downWeights.data();
     }
 
 private:
 
-    void customizeLabelling(TruncatedTreeLabelling& ttl) {
+    void customizeLabelling(TruncatedTreeLabelling &ttl) {
         ttl.reset();
-        const auto& upGraph = minimumWeightedCH.upwardGraph();
-        const auto& downGraph = minimumWeightedCH.downwardGraph(); // reverse downward graph
+        const auto &upGraph = upwardGraph();
+        const auto &downGraph = downwardGraph(); // reverse downward graph
+        const auto upWeights = upwardWeights();
+        const auto downWeights = downwardWeights();
 
-        const auto& numHubs = hierarchy.getNumHubs();
+        const auto &numHubs = hierarchy.getNumHubs();
 #pragma omp parallel // parallelizes callbacks within cch.forEachVertexTopDown.
 #pragma omp single nowait
-        cch.forEachVertexTopDown([&](const int32_t& u) {
+        cch.forEachVertexTopDown([&](const int32_t &u) {
 
             // Do not build labels for truncated vertices.
             if (hierarchy.isVertexTruncated(u))
@@ -57,7 +89,7 @@ private:
             ttl.upPathEdge(u, numHubsU - 1) = INVALID_EDGE; // edge to self
             FORALL_INCIDENT_EDGES(upGraph, u, e) {
                 const auto v = upGraph.edgeHead(e);
-                const auto upWeight = upGraph.traversalCost(e);
+                const auto upWeight = upWeights[e];
                 const auto numHubsV = numHubs[v];
                 KASSERT(numHubsV < numHubsU);
                 KASSERT(numHubsV == hierarchy.getLowestCommonHub(u, v));
@@ -77,7 +109,7 @@ private:
             ttl.downPathEdge(u, numHubsU - 1) = INVALID_EDGE; // edge to self
             FORALL_INCIDENT_EDGES(downGraph, u, e) {
                 const auto v = downGraph.edgeHead(e);
-                const auto downWeight = downGraph.traversalCost(e);
+                const auto downWeight = downWeights[e];
                 const auto numHubsV = numHubs[v];
                 KASSERT(numHubsV < numHubsU);
                 KASSERT(numHubsV == hierarchy.getLowestCommonHub(u, v));
@@ -95,8 +127,8 @@ private:
 //        ttl.assertFullyCustomized();
     }
 
-    const BalancedTopologyCentricTreeHierarchy& hierarchy;
-    const CCH& cch;
+    const BalancedTopologyCentricTreeHierarchy &hierarchy;
+    const CCH &cch;
     CCHMetric cchMetric;
 
     CH minimumWeightedCH;

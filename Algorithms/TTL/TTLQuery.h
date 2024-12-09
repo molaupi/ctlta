@@ -3,6 +3,7 @@
 #include "Algorithms/TTL/TruncatedTreeLabelling.h"
 #include "Algorithms/Dijkstra/DagShortestPaths.h"
 
+template<typename SearchGraphT>
 class TTLQuery {
 
 
@@ -85,18 +86,20 @@ class TTLQuery {
         const TruncatedTreeLabelling &ttl;
     };
 
-    using TruncatedVertexUpwardSearch = DagShortestPaths<CH::SearchGraph, BasicLabelSet<0, ParentInfo::FULL_PARENT_INFO>, PruneSearchAtUntruncatedVertices<true>>;
-    using TruncatedVertexDownwardSearch = DagShortestPaths<CH::SearchGraph, BasicLabelSet<0, ParentInfo::FULL_PARENT_INFO>, PruneSearchAtUntruncatedVertices<false>>;
+    using TruncatedVertexUpwardSearch = DagShortestPaths<SearchGraphT, BasicLabelSet<0, ParentInfo::FULL_PARENT_INFO>, PruneSearchAtUntruncatedVertices<true>>;
+    using TruncatedVertexDownwardSearch = DagShortestPaths<SearchGraphT, BasicLabelSet<0, ParentInfo::FULL_PARENT_INFO>, PruneSearchAtUntruncatedVertices<false>>;
 
 public:
     TTLQuery(const BalancedTopologyCentricTreeHierarchy &hierarchy,
-             const CH::SearchGraph &upGraph,
-             const CH::SearchGraph &downGraph,
+             const SearchGraphT &upGraph,
+             const SearchGraphT &downGraph,
+             int const * const upWeights,
+             int const * const downWeights,
              const TruncatedTreeLabelling &ttl)
             : hierarchy(hierarchy), upGraph(upGraph), downGraph(downGraph), ttl(ttl),
-              buildUpLabelSearch(upGraph, &upGraph.template get<TraversalCostAttribute>(0),
+              buildUpLabelSearch(upGraph, upWeights,
                                  {tempUpLabel, upTruncatedSearchSpace, hierarchy, ttl}),
-              buildDownLabelSearch(downGraph, &downGraph.template get<TraversalCostAttribute>(0),
+              buildDownLabelSearch(downGraph, downWeights,
                                    {tempDownLabel, downTruncatedSearchSpace, hierarchy, ttl}) {
     }
 
@@ -259,8 +262,8 @@ private:
     }
 
     const BalancedTopologyCentricTreeHierarchy &hierarchy;
-    const CH::SearchGraph &upGraph;
-    const CH::SearchGraph &downGraph;
+    const SearchGraphT &upGraph;
+    const SearchGraphT &downGraph;
     const TruncatedTreeLabelling &ttl;
 
     int32_t lastS;

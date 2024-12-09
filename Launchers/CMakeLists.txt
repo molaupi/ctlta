@@ -15,6 +15,7 @@ option(TA_USE_CFW "Make each descent direction conjugate to the last direction."
 option(TA_USE_SIMD_SEARCH "Use SIMD optimizations for the centralized shortest-path search." ON)
 set(TA_LOG_K "" CACHE STRING "Choose the number of simultaneous shortest-path computations.")
 set(TA_TTL_THETA "" CACHE STRING "Choose the maximum size of truncated subtrees int TruncatedTreeLabelling.")
+option(TTL_USE_PERFECT_CUSTOMIZATION "Use perfect customization in CCH on which TTL is based." OFF)
 
 if(NOT TA_USE_CFW)
   target_compile_definitions(AssignTraffic PRIVATE TA_NO_CFW)
@@ -28,6 +29,12 @@ endif()
 if(NOT TA_TTL_THETA STREQUAL "")
   target_compile_definitions(AssignTraffic PRIVATE TA_TTL_THETA=${TA_TTL_THETA})
 endif()
+if (TTL_USE_PERFECT_CUSTOMIZATION)
+  target_compile_definitions(AssignTraffic PRIVATE TTL_USE_PERFECT_CUSTOMIZATION=true)
+else()
+  target_compile_definitions(AssignTraffic PRIVATE TTL_USE_PERFECT_CUSTOMIZATION=false)
+endif()
+
 
 add_executable(
     CalculateDemand CalculateDemand.cc
