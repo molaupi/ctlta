@@ -12,30 +12,35 @@ public:
     // Constructs an individual metric incorporating the specified input weights in the specified
     // BalancedTopologyCentricTreeHierarchy on the basis of the specified CCH.
     TTLMetric(const BalancedTopologyCentricTreeHierarchy& hierarchy, const CCH& cch, const int32_t* const inputWeights)
-            : hierarchy(hierarchy), cch(cch), cchMetric(cch, inputWeights) {}
+            : hierarchy(hierarchy), cch(cch), cchMetric(cch, inputWeights), minimumWeightedCH() {}
 
     void buildCustomizedTTL(TruncatedTreeLabelling& ttl) {
-        cchMetric.customize();
+        minimumWeightedCH = cchMetric.buildMinimumWeightedCH();
         customizeLabelling(ttl);
     }
 
-    // Returns current weights on up edges of CCH.
-    const std::vector<int32_t>& getUpWeights() const {
-        return cchMetric.upWeights;
-    }
+//    // Returns current weights on up edges of CCH.
+//    const std::vector<int32_t>& getUpWeights() const {
+//        return cchMetric.upWeights;
+//    }
+//
+//    // Returns current weights on up edges of CCH.
+//    const std::vector<int32_t>& getDownWeights() const {
+//        return cchMetric.downWeights;
+//    }
 
-    // Returns current weights on up edges of CCH.
-    const std::vector<int32_t>& getDownWeights() const {
-        return cchMetric.downWeights;
+    // Returns reference to minimum weighted CH. Only call after buildCustomizedTTL.
+    const CH& getMinimumWeightedCH() const {
+        return minimumWeightedCH;
     }
 
 private:
 
     void customizeLabelling(TruncatedTreeLabelling& ttl) {
         ttl.reset();
-        const auto& cchGraph = cch.getUpwardGraph();
-        const auto& upWeights = cchMetric.upWeights;
-        const auto& downWeights = cchMetric.downWeights;
+        const auto& upGraph = minimumWeightedCH.upwardGraph();
+        const auto& downGraph = minimumWeightedCH.downwardGraph(); // reverse downward graph
+
         const auto& numHubs = hierarchy.getNumHubs();
 #pragma omp parallel // parallelizes callbacks within cch.forEachVertexTopDown.
 #pragma omp single nowait
@@ -46,27 +51,40 @@ private:
                 return;
 
             const auto numHubsU = numHubs[u];
+
+            // Customize upward label of u using upper neighbors
             ttl.upDist(u, numHubsU - 1) = 0; // distance to self
             ttl.upPathEdge(u, numHubsU - 1) = INVALID_EDGE; // edge to self
-            ttl.downDist(u, numHubsU - 1) = 0; // distance to self
-            ttl.downPathEdge(u, numHubsU - 1) = INVALID_EDGE; // edge to self
-            FORALL_INCIDENT_EDGES(cchGraph, u, e) {
-                const auto v = cchGraph.edgeHead(e);
-                const auto upWeight = upWeights[e];
-                const auto downWeight = downWeights[e];
+            FORALL_INCIDENT_EDGES(upGraph, u, e) {
+                const auto v = upGraph.edgeHead(e);
+                const auto upWeight = upGraph.traversalCost(e);
                 const auto numHubsV = numHubs[v];
                 KASSERT(numHubsV < numHubsU);
                 KASSERT(numHubsV == hierarchy.getLowestCommonHub(u, v));
                 // TODO: SIMD-ify
                 auto uUpLabel = ttl.upLabel(u);
-                auto uDownLabel = ttl.downLabel(u);
                 const auto vUpLabel = ttl.cUpLabel(v);
-                const auto vDownLabel = ttl.cDownLabel(v);
                 for (uint32_t i = 0; i < numHubsV; ++i) {
                     if (uUpLabel.dist(i) > upWeight + vUpLabel.dist(i)) {
                         uUpLabel.dist(i) = upWeight + vUpLabel.dist(i);
                         uUpLabel.pathEdge(i) = e;
                     }
+                }
+            }
+
+            // Customize (reverse) downward label of u using upper neighbors
+            ttl.downDist(u, numHubsU - 1) = 0; // distance to self
+            ttl.downPathEdge(u, numHubsU - 1) = INVALID_EDGE; // edge to self
+            FORALL_INCIDENT_EDGES(downGraph, u, e) {
+                const auto v = downGraph.edgeHead(e);
+                const auto downWeight = downGraph.traversalCost(e);
+                const auto numHubsV = numHubs[v];
+                KASSERT(numHubsV < numHubsU);
+                KASSERT(numHubsV == hierarchy.getLowestCommonHub(u, v));
+                // TODO: SIMD-ify
+                auto uDownLabel = ttl.downLabel(u);
+                const auto vDownLabel = ttl.cDownLabel(v);
+                for (uint32_t i = 0; i < numHubsV; ++i) {
                     if (uDownLabel.dist(i) > downWeight + vDownLabel.dist(i)) {
                         uDownLabel.dist(i) = downWeight + vDownLabel.dist(i);
                         uDownLabel.pathEdge(i) = e;
@@ -80,5 +98,7 @@ private:
     const BalancedTopologyCentricTreeHierarchy& hierarchy;
     const CCH& cch;
     CCHMetric cchMetric;
+
+    CH minimumWeightedCH;
 };
 

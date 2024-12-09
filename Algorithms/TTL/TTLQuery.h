@@ -85,19 +85,18 @@ class TTLQuery {
         const TruncatedTreeLabelling &ttl;
     };
 
-    using TruncatedVertexUpwardSearch = DagShortestPaths<CCH::UpGraph, BasicLabelSet<0, ParentInfo::FULL_PARENT_INFO>, PruneSearchAtUntruncatedVertices<true>>;
-    using TruncatedVertexDownwardSearch = DagShortestPaths<CCH::UpGraph, BasicLabelSet<0, ParentInfo::FULL_PARENT_INFO>, PruneSearchAtUntruncatedVertices<false>>;
+    using TruncatedVertexUpwardSearch = DagShortestPaths<CH::SearchGraph, BasicLabelSet<0, ParentInfo::FULL_PARENT_INFO>, PruneSearchAtUntruncatedVertices<true>>;
+    using TruncatedVertexDownwardSearch = DagShortestPaths<CH::SearchGraph, BasicLabelSet<0, ParentInfo::FULL_PARENT_INFO>, PruneSearchAtUntruncatedVertices<false>>;
 
 public:
     TTLQuery(const BalancedTopologyCentricTreeHierarchy &hierarchy,
-             const CCH &cch,
-             const TruncatedTreeLabelling &ttl,
-             const std::vector<int> &upWeights,
-             const std::vector<int> &downWeights)
-            : hierarchy(hierarchy), cchUpGraph(cch.getUpwardGraph()), ttl(ttl),
-              buildUpLabelSearch(cch.getUpwardGraph(), upWeights,
+             const CH::SearchGraph &upGraph,
+             const CH::SearchGraph &downGraph,
+             const TruncatedTreeLabelling &ttl)
+            : hierarchy(hierarchy), upGraph(upGraph), downGraph(downGraph), ttl(ttl),
+              buildUpLabelSearch(upGraph, &upGraph.template get<TraversalCostAttribute>(0),
                                  {tempUpLabel, upTruncatedSearchSpace, hierarchy, ttl}),
-              buildDownLabelSearch(cch.getUpwardGraph(), downWeights,
+              buildDownLabelSearch(downGraph, &downGraph.template get<TraversalCostAttribute>(0),
                                    {tempDownLabel, downTruncatedSearchSpace, hierarchy, ttl}) {
     }
 
@@ -180,9 +179,9 @@ public:
         // Enumerate path from access vertex to meeting hub using path edges stored in labels.
         int32_t e;
         while ((e = ttl.upPathEdge(v, lastMeetingHubIdx)) != INVALID_EDGE) {
-            KASSERT(e >= 0 && e < cchUpGraph.numEdges());
+            KASSERT(e >= 0 && e < upGraph.numEdges());
             lastUpPath.push_back(e);
-            v = cchUpGraph.edgeHead(e);
+            v = upGraph.edgeHead(e);
         }
         std::reverse(lastUpPath.begin(), lastUpPath.end());
         return lastUpPath;
@@ -215,9 +214,9 @@ public:
         // Enumerate path from access vertex to meeting hub using path edges stored in labels.
         int32_t e;
         while ((e = ttl.downPathEdge(v, lastMeetingHubIdx)) != INVALID_EDGE) {
-            KASSERT(e >= 0 && e < cchUpGraph.numEdges());
+            KASSERT(e >= 0 && e < downGraph.numEdges());
             lastDownPath.push_back(e);
-            v = cchUpGraph.edgeHead(e);
+            v = downGraph.edgeHead(e);
         }
         std::reverse(lastDownPath.begin(), lastDownPath.end());
         return lastDownPath;
@@ -260,7 +259,8 @@ private:
     }
 
     const BalancedTopologyCentricTreeHierarchy &hierarchy;
-    const CCH::UpGraph &cchUpGraph;
+    const CH::SearchGraph &upGraph;
+    const CH::SearchGraph &downGraph;
     const TruncatedTreeLabelling &ttl;
 
     int32_t lastS;

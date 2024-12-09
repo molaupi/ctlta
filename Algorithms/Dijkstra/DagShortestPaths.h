@@ -24,7 +24,7 @@ template<
         typename QueueT = AddressableQuadheap>
 class DagShortestPaths {
 
-
+public:
     // Called by the two public overloads of constructor for general graphs plus given edge weight and for CH search
     // graphs.
     DagShortestPaths(const GraphT &graph, int const *const edgeWeights, PruningCriterionT pruneSearch = {})
@@ -35,20 +35,20 @@ class DagShortestPaths {
               queue(graph.numVertices()),
               pruneSearch(pruneSearch) {}
 
-public:
-
-    // Constructs an DagShortesPaths search instance with given edge weights.
-    DagShortestPaths(const GraphT &graph,
-                                const std::vector<int> &edgeWeights,
-                                PruningCriterionT pruneSearch = {})
-            : DagShortestPaths(graph, edgeWeights.data(), pruneSearch) {
-        assert(graph.numEdges() == edgeWeights.size());
-    }
-
-    // Constructor overload that uses the given edge weight attribute in the graph for edge weights.
-    template<typename WeightT>
-    DagShortestPaths(const GraphT &graph, PruningCriterionT pruneSearch = {})
-            : DagShortestPaths(graph, &graph.template get<WeightT>(0), pruneSearch) {}
+//public:
+//
+//    // Constructs an DagShortesPaths search instance with given edge weights.
+//    DagShortestPaths(const GraphT &graph,
+//                                const std::vector<int> &edgeWeights,
+//                                PruningCriterionT pruneSearch = {})
+//            : DagShortestPaths(graph, edgeWeights.data(), pruneSearch) {
+//        assert(graph.numEdges() == edgeWeights.size());
+//    }
+//
+//    // Constructor overload that uses the given edge weight attribute in the graph for edge weights.
+//    template<typename WeightT>
+//    DagShortestPaths(const GraphT &graph, PruningCriterionT pruneSearch = {})
+//            : DagShortestPaths(graph, &graph.template get<WeightT>(0), pruneSearch) {}
 
 
     // Runs a shortest-path search from s.
@@ -150,3 +150,13 @@ private:
     QueueT queue;                     // The priority queue of unsettled vertices.
     PruningCriterionT pruneSearch;    // The criterion used to prune the search.
 };
+
+//template<
+//        typename WeightT, typename GraphT, typename LabelSetT,
+//        typename PruningCriterionT = dij::NoCriterion,
+//        template<typename> class DistanceLabelContainerT = StampedDistanceLabelContainer,
+//        typename QueueT = AddressableQuadheap>
+//static DagShortestPaths<GraphT, LabelSetT, PruningCriterionT, DistanceLabelContainerT, QueueT>
+//        createDagShortestPathForGraph(const GraphT& graph, PruningCriterionT prune = {}) {
+//            return DagShortestPaths<GraphT, LabelSetT, PruningCriterionT, DistanceLabelContainerT, QueueT>(graph, &graph.template get<WeightT>(0), prune);
+//}
