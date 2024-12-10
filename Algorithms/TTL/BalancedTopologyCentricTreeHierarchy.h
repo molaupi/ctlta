@@ -37,50 +37,63 @@ public:
 
         // Build labels and numCommonHubsComputer
         packedSideIds.clear();
-        sepSizeSum.clear();
-        sepSizeSum.reserve((1 << (sdDepth + 1)));
         packedSideIds.resize(inputGraph.numVertices(), static_cast<uint64_t>(-1));
         truncateVertex.resize(inputGraph.numVertices(), false);
 
-        numHubs.resize(inputGraph.numVertices(), 0);
-        initializeTreeHierarchy(sepDecomp, sdNodesToTruncateAt);
+        std::vector<uint32_t> depthOfVertex(inputGraph.numVertices(), 0);
+        computeVertexLocationInSepDecomp(sepDecomp, sdNodesToTruncateAt, depthOfVertex);
+
+        firstSepSizeSum.clear();
+        firstSepSizeSum.resize(inputGraph.numVertices() + 1);
+        sepSizeSumsOnBranch.clear();
+        computeSepSizeSumsOnBranches(sepDecomp, sdNodesToTruncateAt, depthOfVertex);
 
         KASSERT(std::all_of(packedSideIds.begin(), packedSideIds.end(),
                             [](const uint64_t &id) { return id != static_cast<uint64_t>(-1); }));
     }
 
-    const std::vector<uint32_t> &getNumHubs() const {
-        return numHubs;
+    const uint32_t &getNumHubs(const int32_t& v) const {
+        return sepSizeSumsOnBranch[firstSepSizeSum[v + 1] - 1];
+    }
+
+    size_t numVertices() const {
+        return packedSideIds.size();
     }
 
     // Expects ranks in the CCH-order as inputs.
     uint32_t getLowestCommonHub(const int32_t &s, const int32_t &t) const {
-        const auto minNumHubs = std::min(numHubs[s], numHubs[t]);
+//        const auto minNumHubs = std::min(numHubs[s], numHubs[t]);
 
         // XOR packed side IDs to find out lowest common level in separator hierarchy.
-        const auto l = lowestOneBit(packedSideIds[s] ^ packedSideIds[t]);
+        const int l = lowestOneBit(packedSideIds[s] ^ packedSideIds[t]);
 
         // If packed side IDs of s and t are exactly the same, the branch of s subsumes the branch of t or vice
         // versa. In this case, the lowest common ancestor is the lower one of the two vertices.
-        if (l == -1)
-            return minNumHubs;
+        if (l < 0)
+            return std::min(getNumHubs(s), getNumHubs(t));
 
-        const auto twoToTheL = 1 << l;
+        auto l2 = std::min(static_cast<uint32_t>(l), getVertexDepth(s));
+        l2 = std::min(l2, getVertexDepth(t));
+        KASSERT(l2 < firstSepSizeSum[s + 1] - firstSepSizeSum[s]);
+        KASSERT(l2 < firstSepSizeSum[t + 1] - firstSepSizeSum[t]);
+        return std::min(sepSizeSumsOnBranch[firstSepSizeSum[s] + l2], sepSizeSumsOnBranch[firstSepSizeSum[t] + l2]);
 
-        // packedSideIds[s] and packedSideIds[t] are identical from bit 0 to bit l-1 (counting from least
-        // significant).
-        const auto commonLowerBits = (packedSideIds[s] & (twoToTheL - 1));
-        KASSERT(commonLowerBits == (packedSideIds[t] & (twoToTheL - 1)));
-
-        // Number of common hubs is defined by sum of size of separators up to and including separator that
-        // separates s and t (LCA in separator hierarchy).
-        // We find the separator hierarchy node representing this separator and read this value which is stored
-        // for every separator node in sepSizeSum.
-
-        // Find index of separator hierarchy node that contains the LCA:
-        // Level of SH node is l. Packed side ID of LCA SH node is commonLowerBits.
-        const auto &sepSizeSum = getSepSizeSum(l, commonLowerBits);
-        return std::min(sepSizeSum, minNumHubs);
+//        const auto twoToTheL = 1 << l;
+//
+//        // packedSideIds[s] and packedSideIds[t] are identical from bit 0 to bit l-1 (counting from least
+//        // significant).
+//        const auto commonLowerBits = (packedSideIds[s] & (twoToTheL - 1));
+//        KASSERT(commonLowerBits == (packedSideIds[t] & (twoToTheL - 1)));
+//
+//        // Number of common hubs is defined by sum of size of separators up to and including separator that
+//        // separates s and t (LCA in separator hierarchy).
+//        // We find the separator hierarchy node representing this separator and read this value which is stored
+//        // for every separator node in sepSizeSum.
+//
+//        // Find index of separator hierarchy node that contains the LCA:
+//        // Level of SH node is l. Packed side ID of LCA SH node is commonLowerBits.
+//        const auto &sepSizeSum = getSepSizeSum(l, commonLowerBits);
+//        return std::min(sepSizeSum, minNumHubs);
     }
 
     // Return whether vertex is truncated in which case it does not have a label.
@@ -89,13 +102,18 @@ public:
     }
 
     uint64_t sizeInBytes() const {
-        return numHubs.size() * sizeof(decltype(numHubs)::value_type) +
+        return firstSepSizeSum.size() * sizeof(decltype(firstSepSizeSum)::value_type) +
+               sepSizeSumsOnBranch.size() * sizeof(decltype(sepSizeSumsOnBranch)::value_type) +
                packedSideIds.size() * sizeof(decltype(packedSideIds)::value_type) +
-               truncateVertex.numBlocks() * sizeof(BitVector::Block) +
-               sepSizeSum.size() * sizeof(decltype(sepSizeSum)::value_type);
+               truncateVertex.numBlocks() * sizeof(BitVector::Block) ;
     }
 
 private:
+
+    inline uint32_t getVertexDepth(const int32_t& v) const {
+        KASSERT(v >= 0 && v < firstSepSizeSum.size() - 1);
+        return firstSepSizeSum[v + 1] - firstSepSizeSum[v] - 1;
+    }
 
     // Returns true if every separator node in decomposition has at most two children, or false otherwise.
     static bool hasStrictDissectionStructure(const SeparatorDecomposition &sd) {
@@ -203,105 +221,97 @@ private:
         return doTruncate;
     }
 
-    // Maps a depth and the packed side ID of a node to a unique node index.
-    static uint64_t idxInSepSizeSum(const uint32_t depth, const uint64_t packedSideIdAtNode) {
-        KASSERT((packedSideIdAtNode & (static_cast<uint64_t>(-1) << depth)) == 0);
-        return (1 << depth) - 1 + packedSideIdAtNode;
-    }
+//    // Maps a depth and the packed side ID of a node to a unique node index.
+//    static uint64_t idxInSepSizeSum(const uint32_t depth, const uint64_t packedSideIdAtNode) {
+//        KASSERT((packedSideIdAtNode & (static_cast<uint64_t>(-1) << depth)) == 0);
+//        return (1 << depth) - 1 + packedSideIdAtNode;
+//    }
 
-    // Set sum of sizes of separators on hierarchy branch up to separator hierarchy node (including size of separator
-    // of node itself). Node is specified by depth and packedSideId.
-    void setSepSizeSum(const uint32_t depth, const uint64_t packedSideId, const uint32_t sumSizes) {
-        const auto idx = idxInSepSizeSum(depth, packedSideId);
-        KASSERT(idx < sepSizeSum.capacity());
-        if (idx >= sepSizeSum.size())
-            sepSizeSum.resize(idx + 1, 0);
-        sepSizeSum[idx] = sumSizes;
-    }
+//    // Set sum of sizes of separators on hierarchy branch up to separator hierarchy node (including size of separator
+//    // of node itself). Node is specified by depth and packedSideId.
+//    void setSepSizeSum(const uint32_t depth, const uint64_t packedSideId, const uint32_t sumSizes) {
+//        const auto idx = idxInSepSizeSum(depth, packedSideId);
+//        KASSERT(idx < sepSizeSum.capacity());
+//        if (idx >= sepSizeSum.size())
+//            sepSizeSum.resize(idx + 1, 0);
+//        sepSizeSum[idx] = sumSizes;
+//    }
+//
+//    // Get sum of sizes of separators on hierarchy branch up to separator hierarchy node (including size of separator
+//    // of node itself). Node is specified by depth and packedSideId.
+//    const uint32_t &getSepSizeSum(const uint32_t depth, const uint64_t packedSideId) const {
+//        const auto idx = idxInSepSizeSum(depth, packedSideId);
+//        KASSERT(idx < sepSizeSum.size());
+//        return sepSizeSum[idx];
+//    }
 
-    // Get sum of sizes of separators on hierarchy branch up to separator hierarchy node (including size of separator
-    // of node itself). Node is specified by depth and packedSideId.
-    const uint32_t &getSepSizeSum(const uint32_t depth, const uint64_t packedSideId) const {
-        const auto idx = idxInSepSizeSum(depth, packedSideId);
-        KASSERT(idx < sepSizeSum.size());
-        return sepSizeSum[idx];
-    }
+
+    // Finds depth, side bitvector, and truncation flag of each vertex.
+    void computeVertexLocationInSepDecomp(const SeparatorDecomposition &sd, const BitVector &truncateAtSdNode,
+                                          std::vector<uint32_t>& depthOfVertex) {
 
 
-    void initializeTreeHierarchy(const SeparatorDecomposition &sd, const BitVector &truncateAtSdNode) {
-
-        std::fill(numHubs.begin(), numHubs.end(), 0);
-
-        // If root is truncated, give same packed side ID to all vertices and return. In this case, no tree hierarchy
-        // is used at all.
-        if (truncateAtSdNode[0]) {
-            std::fill(packedSideIds.begin(), packedSideIds.end(), 0);
-            truncateVertex = BitVector(truncateVertex.size(), true);
-            return;
-        }
-
-        uint64_t packedSideId = 0;
-        std::stack<uint32_t> sepSizeSumsOnBranch;
         std::stack<bool> doneWithLeftChild;
-        sepSizeSumsOnBranch.push(sd.lastSeparatorVertex(0) - sd.firstSeparatorVertex(0));
         doneWithLeftChild.push(false);
         uint32_t depth = 1;
+        uint64_t packedSideId = 0;
 
-        // Set num hubs for root node separator vertices
-        uint32_t inSepIdx = 0;
+        // Set location info for root node separator vertices
         for (auto v = sd.lastSeparatorVertex(0) - 1; v >= sd.firstSeparatorVertex(0); --v) {
-            numHubs[v] = inSepIdx + 1;
+            depthOfVertex[v] = 0;
             packedSideIds[v] = packedSideId;
-            ++inSepIdx;
+            truncateVertex[v] = truncateAtSdNode[0];
         }
+
+        // If root is truncated, we are done.
+        if (truncateAtSdNode[0])
+            return;
+
+
+        uint32_t lastNonTruncatedDepth = 1;
 
         const auto recurse = [&](const int parent, const int child) {
             KASSERT(!truncateAtSdNode[parent] || truncateAtSdNode[child]);
             KASSERT(doneWithLeftChild.size() == depth);
-            KASSERT(sepSizeSumsOnBranch.size() <= depth);
 
             // If the parent is not truncated, the child will get a new side ID with a new bit stating which
             // of the two children it is. If the parent is truncated, the child is also truncated and gets the same
             // side ID as the parent.
             if (!truncateAtSdNode[parent]) {
+                KASSERT(depth == lastNonTruncatedDepth);
                 // Set next bit in packedSideId to 0 for recursion to left child and to 1 for recursion to right child.
                 setBit(packedSideId, depth - 1, doneWithLeftChild.top());
             }
 
+
             if (truncateAtSdNode[child]) {
                 // If child is truncated, the vertices in the subtree rooted at child will have no labels.
-                // Set numHubs to sum of separator sizes up to lowest non-truncated ancestor (number at top of stack)
-                // and set packedSideId. Mark vertices as truncated.
+                // Set vertex location info up to lowest non-truncated ancestor. Mark vertices as truncated.
                 for (auto v = sd.lastSeparatorVertex(child) - 1; v >= sd.firstSeparatorVertex(child); --v) {
-                    numHubs[v] = sepSizeSumsOnBranch.top();
+                    depthOfVertex[v] = lastNonTruncatedDepth;
                     packedSideIds[v] = packedSideId;
                     truncateVertex[v] = true;
                 }
             } else {
-                // If child is not truncated, set number of hubs and side IDs for separator vertices at child.
-                const auto sepSumSizeOnBranchUntilParent = sepSizeSumsOnBranch.top();
+                // If child is not truncated, set location info for separator vertices at child.
                 uint32_t inSepIdx = 0;
                 for (auto v = sd.lastSeparatorVertex(child) - 1; v >= sd.firstSeparatorVertex(child); --v) {
-                    numHubs[v] = sepSumSizeOnBranchUntilParent + inSepIdx + 1;
+                    depthOfVertex[v] = lastNonTruncatedDepth;
                     packedSideIds[v] = packedSideId;
                     ++inSepIdx;
                 }
 
-                // Memorize separator size up to and including child
-                KASSERT(sepSizeSumsOnBranch.size() == doneWithLeftChild.size());
-                sepSizeSumsOnBranch.push(sepSumSizeOnBranchUntilParent + inSepIdx);
-                setSepSizeSum(depth, packedSideId, sepSumSizeOnBranchUntilParent + inSepIdx);
+                ++lastNonTruncatedDepth;
             }
 
             // Memorize that we are not done with left child of child
-            doneWithLeftChild.push(false);
             ++depth;
+            doneWithLeftChild.push(false);
 
         };
 
         const auto backtrack = [&](const int child, const int parent) {
             KASSERT(doneWithLeftChild.size() == depth);
-            KASSERT(sepSizeSumsOnBranch.size() <= depth);
 
             // Remember that (at least) one child of parent is done. This way, after left child of parent is done,
             // we know that next recursion from parent is right child.
@@ -315,21 +325,114 @@ private:
                 setBit(packedSideId, depth - 1, false);
             }
 
-            // If child was not truncated, it has an entry on sepSizeSumsOnBranch. Remove this entry.
+            // If child was not truncated, also reduce lastNonTruncatedDepth.
             if (!truncateAtSdNode[child])
-                sepSizeSumsOnBranch.pop();
+                --lastNonTruncatedDepth;
         };
 
         forEachSepDecompNodeInDfsOrder(sd, recurse, backtrack);
     }
 
-    std::vector<uint32_t> numHubs; // For each vertex, stores number of hubs in label of vertex
+    // Populates firstSepSizeSum and sepSizeSumsOnBranches by traversing the separator decomposition.
+    // Requires known number of hubs per vertex for offsets in 2D-array.
+    void computeSepSizeSumsOnBranches(const SeparatorDecomposition &sd, const BitVector &truncateAtSdNode, const std::vector<uint32_t>& depthOfVertex) {
+
+        // Set firstSepSizeSum to prefix sum over numHubs
+        uint32_t offset = 0;
+        for (uint32_t i = 0; i < depthOfVertex.size(); ++i) {
+            firstSepSizeSum[i] = offset;
+            offset += depthOfVertex[i] + !static_cast<bool>(truncateVertex[i]);
+        }
+        firstSepSizeSum[depthOfVertex.size()] = offset;
+
+        // Initialize sepSizeSumsOnBranches
+        sepSizeSumsOnBranch.resize(offset, std::numeric_limits<uint32_t>::max());
+
+        // If root is truncated, assign 0 sep size sum to all vertices and return.
+        if (truncateAtSdNode[0]) {
+            for (int32_t v = 0; v < firstSepSizeSum.size() - 1; ++v) {
+                KASSERT(firstSepSizeSum[v + 1] - firstSepSizeSum[v] == 1);
+                sepSizeSumsOnBranch[firstSepSizeSum[v]] = 0;
+            }
+            return;
+        }
+
+        // Populate root node separator vertices
+        uint32_t inSepIdx = 0;
+        for (auto v = sd.lastSeparatorVertex(0) - 1; v >= sd.firstSeparatorVertex(0); --v) {
+            sepSizeSumsOnBranch[firstSepSizeSum[v]] = inSepIdx + 1;
+            ++inSepIdx;
+        }
+
+        std::vector<uint32_t> sepSizeSumsOnCurBranch;
+        sepSizeSumsOnCurBranch.push_back(sd.lastSeparatorVertex(0) - sd.firstSeparatorVertex(0));
+
+
+        const auto recurse = [&](const int parent, const int child) {
+            KASSERT(!truncateAtSdNode[parent] || truncateAtSdNode[child]);
+
+
+            if (truncateAtSdNode[child]) {
+                // If child is truncated, the vertices in the subtree rooted at child will have no labels.
+                // Set sepSizeSumsOnBranch up to last non-truncated ancestor.
+                for (auto v = sd.lastSeparatorVertex(child) - 1; v >= sd.firstSeparatorVertex(child); --v) {
+                    KASSERT(firstSepSizeSum[v + 1] - firstSepSizeSum[v] == sepSizeSumsOnCurBranch.size());
+                    std::copy(sepSizeSumsOnCurBranch.begin(), sepSizeSumsOnCurBranch.end(), sepSizeSumsOnBranch.begin() + firstSepSizeSum[v]);
+                }
+            } else {
+
+
+                // If child is not truncated, set number of hubs and side IDs for separator vertices at child.
+                uint32_t inSepIdx = 0;
+                for (auto v = sd.lastSeparatorVertex(child) - 1; v >= sd.firstSeparatorVertex(child); --v) {
+                    KASSERT(firstSepSizeSum[v + 1] - firstSepSizeSum[v] == sepSizeSumsOnCurBranch.size() + 1);
+                    // Populate up to parent
+                    std::copy(sepSizeSumsOnCurBranch.begin(), sepSizeSumsOnCurBranch.end(), sepSizeSumsOnBranch.begin() + firstSepSizeSum[v]);
+                    // Populate location within current separator
+                    sepSizeSumsOnBranch[firstSepSizeSum[v + 1] - 1] = sepSizeSumsOnCurBranch.back() + inSepIdx + 1;
+                    ++inSepIdx;
+                }
+
+                // Memorize separator size up to and including child
+                sepSizeSumsOnCurBranch.push_back(sepSizeSumsOnCurBranch.back() + inSepIdx);
+            }
+        };
+
+        const auto backtrack = [&](const int child, const int parent) {
+            // If child was not truncated, it has an entry on sepSizeSumsOnCurBranch. Remove this entry.
+            if (!truncateAtSdNode[child]) {
+                sepSizeSumsOnCurBranch.pop_back();
+            }
+        };
+
+        forEachSepDecompNodeInDfsOrder(sd, recurse, backtrack);
+
+        for (const auto& s : sepSizeSumsOnBranch)
+            KASSERT(s != std::numeric_limits<uint32_t>::max());
+    }
+
+
+
+
+//    std::vector<uint32_t> numHubs; // For each vertex, stores number of hubs in label of vertex
     std::vector<uint64_t> packedSideIds; // store which side each vertex is on in each level of separator hierarchy
     BitVector truncateVertex; // If truncateVertex[v], vertex v is truncated and should not get a label
 
-    // For each separator node, we have to store the sum of sizes of separators on the hierarchy branch up to the node.
-    // These values need to be retrieved on the basis of a depth and the packedSideSum of the node.
-    // We map depth and packedSideSum of a node to a unique index and store the sep size sum at that index.
-    std::vector<uint32_t> sepSizeSum;
+    // Let v be a vertex which is a separator vertex at level l. We store the sum of separator sizes, i.e., number of
+    // hubs, at every level between 0 and l on the branch of the decomposition that leads to v. This allows us to
+    // retrieve the number of common hubs between two vertices by finding their lowest common level in the
+    // decomposition (using packedSideIds) and reading the number of hubs up to that level on the common branch.
+    // The number at level l only includes all vertices in the separator that have higher (or equal) rank in the order.
+    // Thus, level stores the total number of hubs for v.
+    // The level of truncated vertices is considered to be the level of the lowest non-truncated ancestor.
+    // We use an index array firstSepSizeSum s.t. the firstSepSizeSum[v + 1] - firstSepSizeSum[v] = l + 1 and the
+    // sep size sums for vertex v are stored at sepSizeSumsOnBranch[firstSepSizeSum[v]..firstSepSizeSum[v+1]].
+    std::vector<uint32_t> firstSepSizeSum;
+    std::vector<uint32_t> sepSizeSumsOnBranch;
+
+//    // For each separator node, we have to store the sum of sizes of separators on the hierarchy branch up to the node.
+//    // These values need to be retrieved on the basis of a depth and the packedSideSum of the node.
+//    // We map depth and packedSideSum of a node to a unique index and store the sep size sum at that index.
+//    std::vector<uint32_t> sepSizeSum;
 };
 

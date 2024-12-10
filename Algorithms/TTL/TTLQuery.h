@@ -68,7 +68,7 @@ class TTLQuery {
 
             // Update temporary label of source / target with label of v.
             const auto labelOfV = UP ? ttl.upLabel(v) : ttl.downLabel(v);
-            const auto maxHub = std::min(temporaryLabel.numHubs(), hierarchy.getNumHubs()[v]);
+            const auto maxHub = std::min(temporaryLabel.numHubs(), labelOfV.numHubs);
             for (auto i = 0; i < maxHub; ++i) {
                 const auto distViaV = distToV[0] + labelOfV.dist(i);
                 if (distViaV < temporaryLabel.dist(i)) {
@@ -136,7 +136,7 @@ public:
             // to be non-truncated. In this case, the shortest path is found using just the distances found during
             // the two elimination tree searches in the CCH. We only have to consider the truncated vertices in
             // the search space of the higher ranked vertex between s and t.
-            if (hierarchy.getNumHubs()[s] == lch && hierarchy.getNumHubs()[t] == lch) {
+            if (hierarchy.getNumHubs(s) == lch && hierarchy.getNumHubs(t) == lch) {
                 const auto& searchSpace = s > t? upTruncatedSearchSpace : downTruncatedSearchSpace;
                 for (const auto& v : searchSpace) {
                     const auto cchDist = buildUpLabelSearch.getDistance(v) + buildDownLabelSearch.getDistance(v);
@@ -234,7 +234,7 @@ private:
     // search is pruned.
     // Populates distances only for hubs 0..lch (inclusive).
     void buildTempUpLabel(const int32_t v, const uint32_t lch) {
-        KASSERT(lch <= hierarchy.getNumHubs()[v]);
+        KASSERT(lch <= hierarchy.getNumHubs(v));
         tempUpLabel.init(lch);
         upTruncatedSearchSpace.clear();
         buildUpLabelSearch.run(v);
@@ -245,7 +245,7 @@ private:
     // the search is pruned.
     // Populates distances only for hubs 0..lch (inclusive).
     void buildTempDownLabel(const int32_t v, const uint32_t lch) {
-        KASSERT(lch <= hierarchy.getNumHubs()[v]);
+        KASSERT(lch <= hierarchy.getNumHubs(v));
         tempDownLabel.init(lch);
         downTruncatedSearchSpace.clear();
         buildDownLabelSearch.run(v);

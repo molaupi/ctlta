@@ -56,14 +56,13 @@ public:
     // Initializes tree labelling with underlying tree hierarchy. (Make sure to preprocess tree hierarchy before calling).
     void init() {
         uint64_t offset = 0;
-        const auto &numHubs = hierarchy.getNumHubs();
-        labelOffsets.resize(numHubs.size(), INVALID_OFFSET);
-        for (auto v = 0; v < numHubs.size(); ++v) {
+        labelOffsets.resize(hierarchy.numVertices(), INVALID_OFFSET);
+        for (auto v = 0; v < hierarchy.numVertices(); ++v) {
             // Do not initialize labels for truncated vertices.
             if (hierarchy.isVertexTruncated(v))
                 continue;
             labelOffsets[v] = offset;
-            offset += 2 * numHubs[v]; // numHubs entries for distances and numHubs entries for path edge pointers
+            offset += 2 * hierarchy.getNumHubs(v); // numHubs entries for distances and numHubs entries for path edge pointers
         }
         upLabelData.resize(offset, INFTY);
         downLabelData.resize(offset, INFTY);
@@ -76,32 +75,32 @@ public:
 
     ConstLabel upLabel(const int32_t &v) const {
         KASSERT(labelOffsets[v] != INVALID_OFFSET);
-        return ConstLabel(upLabelData.data() + labelOffsets[v], hierarchy.getNumHubs()[v]);
+        return ConstLabel(upLabelData.data() + labelOffsets[v], hierarchy.getNumHubs(v));
     }
 
     ConstLabel cUpLabel(const int32_t &v) const {
         KASSERT(labelOffsets[v] != INVALID_OFFSET);
-        return ConstLabel(upLabelData.data() + labelOffsets[v], hierarchy.getNumHubs()[v]);
+        return ConstLabel(upLabelData.data() + labelOffsets[v], hierarchy.getNumHubs(v));
     }
 
     Label upLabel(const int32_t &v) {
         KASSERT(labelOffsets[v] != INVALID_OFFSET);
-        return Label(upLabelData.data() + labelOffsets[v], hierarchy.getNumHubs()[v]);
+        return Label(upLabelData.data() + labelOffsets[v], hierarchy.getNumHubs(v));
     }
 
     ConstLabel downLabel(const int32_t &v) const {
         KASSERT(labelOffsets[v] != INVALID_OFFSET);
-        return ConstLabel(downLabelData.data() + labelOffsets[v], hierarchy.getNumHubs()[v]);
+        return ConstLabel(downLabelData.data() + labelOffsets[v], hierarchy.getNumHubs(v));
     }
 
     ConstLabel cDownLabel(const int32_t &v) const {
         KASSERT(labelOffsets[v] != INVALID_OFFSET);
-        return ConstLabel(downLabelData.data() + labelOffsets[v], hierarchy.getNumHubs()[v]);
+        return ConstLabel(downLabelData.data() + labelOffsets[v], hierarchy.getNumHubs(v));
     }
 
     Label downLabel(const int32_t &v) {
         KASSERT(labelOffsets[v] != INVALID_OFFSET);
-        return Label(downLabelData.data() + labelOffsets[v], hierarchy.getNumHubs()[v]);
+        return Label(downLabelData.data() + labelOffsets[v], hierarchy.getNumHubs(v));
     }
 
 
@@ -117,12 +116,12 @@ public:
 
     inline int32_t &upPathEdge(const int32_t &v, const uint32_t &hubIdx) {
         KASSERT(labelOffsets[v] != INVALID_OFFSET);
-        return upLabelData[labelOffsets[v] + hierarchy.getNumHubs()[v] + hubIdx];
+        return upLabelData[labelOffsets[v] + hierarchy.getNumHubs(v) + hubIdx];
     }
 
     const int32_t &upPathEdge(const int32_t &v, const uint32_t &hubIdx) const {
         KASSERT(labelOffsets[v] != INVALID_OFFSET);
-        return upLabelData[labelOffsets[v] + hierarchy.getNumHubs()[v] + hubIdx];
+        return upLabelData[labelOffsets[v] + hierarchy.getNumHubs(v) + hubIdx];
     }
 
     inline int32_t &downDist(const int32_t &v, const uint32_t &hubIdx) {
@@ -137,19 +136,19 @@ public:
 
     inline int32_t &downPathEdge(const int32_t &v, const uint32_t &hubIdx) {
         KASSERT(labelOffsets[v] != INVALID_OFFSET);
-        return downLabelData[labelOffsets[v] + hierarchy.getNumHubs()[v] + hubIdx];
+        return downLabelData[labelOffsets[v] + hierarchy.getNumHubs(v) + hubIdx];
     }
 
     const int32_t &downPathEdge(const int32_t &v, const uint32_t &hubIdx) const {
         KASSERT(labelOffsets[v] != INVALID_OFFSET);
-        return downLabelData[labelOffsets[v] + hierarchy.getNumHubs()[v] + hubIdx];
+        return downLabelData[labelOffsets[v] + hierarchy.getNumHubs(v) + hubIdx];
     }
 
     void assertFullyCustomized() const {
         for (int32_t v = 0; v < labelOffsets.size(); ++v) {
             if (hierarchy.isVertexTruncated(v))
                 continue;
-            for (auto i = 0; i < hierarchy.getNumHubs()[v]; ++i) {
+            for (auto i = 0; i < hierarchy.getNumHubs(v); ++i) {
                 KASSERT(!(upDist(v, i) == INFTY || upPathEdge(v, i) == INFTY || downDist(v, i) == INFTY ||
                           downPathEdge(v, i) == INFTY));
             }

@@ -73,7 +73,6 @@ private:
         const auto upWeights = upwardWeights();
         const auto downWeights = downwardWeights();
 
-        const auto &numHubs = hierarchy.getNumHubs();
 #pragma omp parallel // parallelizes callbacks within cch.forEachVertexTopDown.
 #pragma omp single nowait
         cch.forEachVertexTopDown([&](const int32_t &u) {
@@ -82,7 +81,7 @@ private:
             if (hierarchy.isVertexTruncated(u))
                 return;
 
-            const auto numHubsU = numHubs[u];
+            const auto numHubsU = hierarchy.getNumHubs(u);
 
             // Customize upward label of u using upper neighbors
             ttl.upDist(u, numHubsU - 1) = 0; // distance to self
@@ -90,7 +89,7 @@ private:
             FORALL_INCIDENT_EDGES(upGraph, u, e) {
                 const auto v = upGraph.edgeHead(e);
                 const auto upWeight = upWeights[e];
-                const auto numHubsV = numHubs[v];
+                const auto numHubsV = hierarchy.getNumHubs(v);
                 KASSERT(numHubsV < numHubsU);
                 KASSERT(numHubsV == hierarchy.getLowestCommonHub(u, v));
                 // TODO: SIMD-ify
@@ -110,7 +109,7 @@ private:
             FORALL_INCIDENT_EDGES(downGraph, u, e) {
                 const auto v = downGraph.edgeHead(e);
                 const auto downWeight = downWeights[e];
-                const auto numHubsV = numHubs[v];
+                const auto numHubsV = hierarchy.getNumHubs(v);
                 KASSERT(numHubsV < numHubsU);
                 KASSERT(numHubsV == hierarchy.getLowestCommonHub(u, v));
                 // TODO: SIMD-ify
