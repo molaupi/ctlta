@@ -4,7 +4,7 @@
 
 class TruncatedTreeLabelling {
 
-    static constexpr uint32_t INVALID_OFFSET = static_cast<uint32_t>(-1);
+    static constexpr uint64_t INVALID_OFFSET = static_cast<uint64_t>(-1);
 
 public:
 
@@ -165,7 +165,7 @@ private:
 
     const BalancedTopologyCentricTreeHierarchy &hierarchy;
 
-    std::vector<uint32_t> labelOffsets;
+    std::vector<uint64_t> labelOffsets;
     std::vector<int32_t> upLabelData; // expects distances, and edge IDs to be int32_t.
     std::vector<int32_t> downLabelData; // expects distances, and edge IDs to be int32_t.
 
