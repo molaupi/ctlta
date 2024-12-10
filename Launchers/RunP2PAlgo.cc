@@ -474,6 +474,55 @@ inline void runPreprocessing(const CommandLineParser& clp) {
       if (!outputFile.good())
           throw std::invalid_argument("file cannot be opened -- '" + outputFileName);
       sepDecomp.writeTo(outputFile);
+  } else if (algorithmName == "TTL-custom") {
+
+      // Run the customization phase of CCH.
+      std::ifstream sepFile(sepFileName, std::ios::binary);
+      if (!sepFile.good())
+          throw std::invalid_argument("file not found -- '" + sepFileName + "'");
+      SeparatorDecomposition decomp;
+      decomp.readFrom(sepFile);
+      sepFile.close();
+
+      if (!endsWith(outputFileName, ".csv"))
+          outputFileName += ".csv";
+      std::ofstream outputFile(outputFileName);
+      if (!outputFile.good())
+          throw std::invalid_argument("file cannot be opened -- '" + outputFileName + ".csv'");
+      outputFile << "# Graph: " << graphFileName << '\n';
+      outputFile << "# Separator: " << sepFileName << '\n';
+      outputFile << "cch_customization,ttl_customization,total_time\n";
+
+      CCH cch;
+      cch.preprocess(graph, decomp);
+
+      BalancedTopologyCentricTreeHierarchy treeHierarchy;
+      treeHierarchy.preprocess(graph, decomp);
+      TruncatedTreeLabelling ttl(treeHierarchy);
+        ttl.init();
+
+      Timer timer;
+      int cchCustom, ttlCustom, tot;
+      for (auto i = 0; i < numCustomRuns; ++i) {
+          {
+              CCHMetric metric(cch, &graph.travelTime(0));
+              timer.restart();
+              if constexpr (TTL_USE_PERFECT_CUSTOMIZATION) {
+                  metric.buildMinimumWeightedCH();
+              } else {
+                  metric.customize();
+              }
+              cchCustom = timer.elapsed<std::chrono::microseconds>();
+          }
+          {
+              TTLMetric<TTL_USE_PERFECT_CUSTOMIZATION> metric(treeHierarchy, cch, &graph.travelTime(0));
+              timer.restart();
+              metric.buildCustomizedTTL(ttl);
+              tot = timer.elapsed<std::chrono::microseconds>();
+          }
+          ttlCustom = tot - cchCustom;
+          outputFile << cchCustom << ',' << ttlCustom << ',' << tot << '\n';
+      }
   } else {
 
     throw std::invalid_argument("invalid P2P algorithm -- '" + algorithmName + "'");
