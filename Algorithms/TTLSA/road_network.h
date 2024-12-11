@@ -28,7 +28,9 @@
 #include <set>
 #include <fstream>
 
-namespace chl::road_network {
+// TTL Standalone (TTLSA) data structures and methods.
+// Implementation of TTL that uses its own graph data structure, own CCH implementation and so on.
+namespace ttlsa::road_network {
 
 typedef uint32_t NodeID;
 typedef uint32_t SubgraphID;

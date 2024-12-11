@@ -4,7 +4,7 @@
 
 using namespace std;
 
-namespace chl::util {
+namespace ttlsa::util {
 
 // stack of times of start_timer calls
 thread_local static vector<chrono::time_point<std::chrono::steady_clock>> start_times;
@@ -43,7 +43,7 @@ ListFormat get_list_format()
     return current_list_format;
 }
 
-std::ostream& operator<<(std::ostream& os, chl::util::Summary s)
+std::ostream& operator<<(std::ostream& os, ttlsa::util::Summary s)
 {
     return os << s.min << " - " << s.max << " (avg " << s.avg << ")";
 }

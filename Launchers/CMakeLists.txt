@@ -1,5 +1,5 @@
 add_executable(AssignTraffic AssignTraffic.cc
-                ../Algorithms/CHL/road_network.cpp ../Algorithms/CHL/util.cpp)
+        ../Algorithms/TTLSA/road_network.cpp ../Algorithms/TTLSA/util.cpp)
 target_compile_definitions(AssignTraffic PRIVATE CSV_IO_NO_THREAD)
 # target_include_directories(AssignTraffic PRIVATE ${Boost_INCLUDE_DIR})
 target_link_libraries(AssignTraffic Boost::boost routingkit kassert vectorclass fast_cpp_csv_parser)

@@ -12,17 +12,17 @@
 #include "DataStructures/Labels/SimdLabelSet.h"
 #include "Tools/Simd/AlignedVector.h"
 
-#include "Algorithms/CHL/road_network.h"
+#include "Algorithms/TTLSA/road_network.h"
 
 namespace trafficassignment {
 
 // An adapter that makes CCHs usable in the all-or-nothing assignment procedure.
     template<typename InputGraphT, typename WeightT>
-    class CHLAdapter {
+    class TTLSAAdapter {
     public:
 
         // The number of source-target pairs per call to the query algorithm.
-        // In the case of CHL, the K searches are computed sequentially.
+        // In the case of TTLSA, the K searches are computed sequentially.
         static constexpr int K = 1 << TA_LOG_K;
 
         using InputGraph = InputGraphT;
@@ -34,12 +34,12 @@ namespace trafficassignment {
             // Constructs a query algorithm instance working on the specified data.
             QueryAlgo(
                     const InputGraphT &inputGraph,
-                    const chl::road_network::Graph &chlGraph,
-                    const chl::road_network::ContractionHierarchy &ch,
-                    const chl::road_network::ContractionIndex &ci,
+                    const ttlsa::road_network::Graph &ttlsaGraph,
+                    const ttlsa::road_network::ContractionHierarchy &ch,
+                    const ttlsa::road_network::ContractionIndex &ci,
                     AlignedVector<int> &globalFlow)
                     : inputGraph(inputGraph),
-                      chlGraph(chlGraph),
+                      ttlsaGraph(ttlsaGraph),
                       ch(ch),
                       ci(ci),
                       distances(),
@@ -54,15 +54,15 @@ namespace trafficassignment {
             // i.e., only pairs 0..k are relevant.
             void run(std::array<int, K> &sources, std::array<int, K> &targets, const int k) {
 
-                // No facilities for centralized searches in CHL. Run each search individually:
+                // No facilities for centralized searches in TTLSA. Run each search individually:
                 for (auto i = 0; i < k; ++i) {
 
-                    // CHL node IDs start at 1:
-                    const auto chlSource = sources[i] + 1;
-                    const auto chlTarget = targets[i] + 1;
+                    // TTLSA node IDs start at 1:
+                    const auto ttlsaSource = sources[i] + 1;
+                    const auto ttlsaTarget = targets[i] + 1;
 
-                    chl::road_network::distance_t dist;
-                    const auto vertexPath = chlGraph.query_path(ch, ci, chlSource, chlTarget, dist);
+                    ttlsa::road_network::distance_t dist;
+                    const auto vertexPath = ttlsaGraph.query_path(ch, ci, ttlsaSource, ttlsaTarget, dist);
 
                     // Find edges on path and add flow for every edge:
                     int recomputedDist = 0;
@@ -77,7 +77,7 @@ namespace trafficassignment {
 
                         tail = head;
                     }
-                    KASSERT(dist == recomputedDist, "dist returned by CHL is not correct", 20);
+                    KASSERT(dist == recomputedDist, "dist returned by TTLSA is not correct", 20);
 
                     distances[i] = static_cast<int>(dist);
                 }
@@ -96,9 +96,9 @@ namespace trafficassignment {
         private:
 
             const InputGraphT &inputGraph; // The TA representation of the graph
-            const chl::road_network::Graph &chlGraph; // The CHL representation of the graph
-            const chl::road_network::ContractionHierarchy &ch; // CHL underlying contraction hierarchy
-            const chl::road_network::ContractionIndex &ci; // CHL underlying label structure
+            const ttlsa::road_network::Graph &ttlsaGraph; // The TTLSA representation of the graph
+            const ttlsa::road_network::ContractionHierarchy &ch; // TTLSA underlying contraction hierarchy
+            const ttlsa::road_network::ContractionIndex &ci; // TTLSA underlying label structure
 
             std::array<int, K> distances; // distances computed in last call to run()
 
@@ -107,7 +107,7 @@ namespace trafficassignment {
         };
 
         // Constructs an adapter for CCHs.
-        explicit CHLAdapter(const InputGraphT &inputGraph)
+        explicit TTLSAAdapter(const InputGraphT &inputGraph)
                 : inputGraph(inputGraph) {
             assert(inputGraph.numEdges() > 0);
             assert(inputGraph.isDefrag());
@@ -116,44 +116,44 @@ namespace trafficassignment {
 // Invoked before the first iteration.
         void preprocess() {
 
-            // Convert the input graph to CHL representation.
-            chlGraph.resize(inputGraph.numVertices());
+            // Convert the input graph to TTLSA representation.
+            ttlsaGraph.resize(inputGraph.numVertices());
             FORALL_VALID_EDGES(inputGraph, u, e) {
-                    // CHL graph node IDs start at 1
-                    chlGraph.add_edge(u + 1, inputGraph.edgeHead(e) + 1, inputGraph.template get<WeightT>(e), false);
+                    // TTLSA graph node IDs start at 1
+                    ttlsaGraph.add_edge(u + 1, inputGraph.edgeHead(e) + 1, inputGraph.template get<WeightT>(e), false);
                 }
 
             // Contract degree 1 nodes
-            std::vector<chl::road_network::Neighbor> closest;
-            chlGraph.contract(closest, false);
+            std::vector<ttlsa::road_network::Neighbor> closest;
+            ttlsaGraph.contract(closest, false);
 
             // Build balanced tree hierarchy
             static constexpr double CUT_BALANCE = 0.2;
             static constexpr size_t LEAF_SIZE_THRESHOLD = 0;
-            std::vector<chl::road_network::CutIndex> cutIndex;
-            chlGraph.create_cut_index(cutIndex, CUT_BALANCE, LEAF_SIZE_THRESHOLD);
+            std::vector<ttlsa::road_network::CutIndex> cutIndex;
+            ttlsaGraph.create_cut_index(cutIndex, CUT_BALANCE, LEAF_SIZE_THRESHOLD);
 
             // Reset graph to original form before contractions
-            chlGraph.reset();
+            ttlsaGraph.reset();
 
             // Initialize shortcut graph and labels
-            chlGraph.initialize(ch, cutIndex, closest);
-            ci = std::make_unique<chl::road_network::ContractionIndex>(cutIndex, closest);
+            ttlsaGraph.initialize(ch, cutIndex, closest);
+            ci = std::make_unique<ttlsa::road_network::ContractionIndex>(cutIndex, closest);
         }
 
         // Invoked before each iteration.
         void customize() {
 
-            // CHL can only deal with undirected graphs. Make sure traversal costs are the same in both directions.
+            // TTLSA can only deal with undirected graphs. Make sure traversal costs are the same in both directions.
             verifyUndirectedWeights(inputGraph);
 
-            chlGraph.resetSpDatastructures(ch, *ci);
+            ttlsaGraph.resetSpDatastructures(ch, *ci);
 
             // Customize CCH and HL with new metric on edges:
-            std::vector<chl::road_network::Edge> edges;
-            chlGraph.get_edges(edges);
+            std::vector<ttlsa::road_network::Edge> edges;
+            ttlsaGraph.get_edges(edges);
             for (auto& e : edges) {
-                // CHL graph node IDs start at 1
+                // TTLSA graph node IDs start at 1
                 const auto tail = e.a - 1;
                 const auto head = e.b - 1;
                 const auto eInInputGraph = inputGraph.uniqueEdgeBetween(tail, head);
@@ -161,8 +161,8 @@ namespace trafficassignment {
                 e.d = inputGraph.traversalCost(eInInputGraph);
 
             }
-            chlGraph.customise_shortcut_graph(ch, *ci, edges);
-            chlGraph.customise_hub_labelling(ch, *ci);
+            ttlsaGraph.customise_shortcut_graph(ch, *ci, edges);
+            ttlsaGraph.customise_hub_labelling(ch, *ci);
 
             // Initialize flows vector
             flow.assign(inputGraph.numEdges(), 0);
@@ -171,7 +171,7 @@ namespace trafficassignment {
         // Returns an instance of the query algorithm.
         QueryAlgo getQueryAlgoInstance() {
             KASSERT((bool) ci);
-            return {inputGraph, chlGraph, ch, *ci, flow};
+            return {inputGraph, ttlsaGraph, ch, *ci, flow};
         }
 
         // Propagates the flows on the edges in the search graphs to the edges in the input graph.
@@ -203,9 +203,9 @@ namespace trafficassignment {
         }
 
         const InputGraphT &inputGraph; // The input graph in TA format.
-        chl::road_network::Graph chlGraph; // The graph in CHL format
-        chl::road_network::ContractionHierarchy ch; // CHL underlying contraction hierarchy
-        std::unique_ptr<chl::road_network::ContractionIndex> ci; // CHL underlying label structure
+        ttlsa::road_network::Graph ttlsaGraph; // The graph in TTLSA format
+        ttlsa::road_network::ContractionHierarchy ch; // TTLSA underlying contraction hierarchy
+        std::unique_ptr<ttlsa::road_network::ContractionIndex> ci; // TTLSA underlying label structure
 
         AlignedVector<int> flow;   // The flows on the edges in the graph.
     };
