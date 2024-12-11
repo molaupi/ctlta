@@ -66,7 +66,6 @@ namespace ttlsa::road_network {
     }
 
 // half-matrix index for storing half-matrix in flat vector
-    [[maybe_unused]]
     static size_t hmi(size_t a, size_t b) {
         assert(a != b);
         return a < b ? (b * (b - 1) >> 1) + a : (a * (a - 1) >> 1) + b;
@@ -666,6 +665,11 @@ namespace ttlsa::road_network {
                                                                                          distance(distance) {
     }
 
+    QNode::QNode(NodeID anc_node, NodeID pre_anc_node, distance_t distance) : anc_node(anc_node),
+                                                                              pre_anc_node(pre_anc_node),
+                                                                              distance(distance) {
+    }
+
     bool Neighbor::operator<(const Neighbor &other) const {
         return node < other.node;
     }
@@ -815,6 +819,23 @@ namespace ttlsa::road_network {
         }
         node_data[s].subgraph_id = NO_SUBGRAPH;
         node_data[t].subgraph_id = NO_SUBGRAPH;
+    }
+
+
+    void Graph::resetSpDatastructures(ContractionHierarchy &ch) const {
+
+        // reseting ch
+        for(NodeID x: ch.bottom_up_nodes) {
+            for(CHNeighbor &n: ch.nodes[x].up_neighbors) {
+                n.distance = infinity;
+                n.triangle_node = NO_NODE;
+            }
+        }
+
+//        for(NodeID x: ch.contracted_nodes) {
+//            ch.nodes[x].up_neighbors[0].distance = 0;
+//            ch.nodes[x].up_neighbors[0].triangle_node = NO_NODE;
+//        }
     }
 
     void Graph::resetSpDatastructures(ContractionHierarchy &ch, ContractionIndex &tcl) const {
@@ -1671,7 +1692,7 @@ namespace ttlsa::road_network {
         assert(is_undirected());
 #ifndef NDEBUG
         // sort neighbors to make algorithms deterministic
-        for (NodeID node: nodes)
+        for (NodeID node : nodes)
             sort(node_data[node].neighbors.begin(), node_data[node].neighbors.end());
 #endif
         // store original neighbor counts
@@ -1882,12 +1903,11 @@ void ContractionHierarchy::write(ostream &os) {
         for (int i = 0; i < ch.nodes[v].up_neighbors.size(); i++) {
             if (ch.nodes[v].up_neighbors[i].neighbor == w) return i;
         }
-
-        return -1;
     }
 
     void Graph::initialize(ContractionHierarchy &ch, std::vector<CutIndex> &ci, vector <Neighbor> &closest) {
         ch.bottom_up_nodes.reserve(nodes.size() + 1);
+        ch.contracted_nodes.reserve(1000);
 
         // initialize distance index to determine edge direction
         ch.nodes.resize(nodes.size() + 1);
@@ -1900,7 +1920,8 @@ void ContractionHierarchy::write(ostream &os) {
                     ci[node].paths.resize(ch.nodes[node].dist_index + 1, infinity);
                 }
             } else {
-                ch.nodes[node].up_neighbors.push_back(CHNeighbor(closest[node].node, NO_NODE, closest[node].distance));
+                ch.contracted_nodes.push_back(node);
+                ch.nodes[node].up_neighbors.push_back(CHNeighbor(closest[node].node, NO_NODE, infinity));
             }
         }
 
@@ -1935,55 +1956,29 @@ void ContractionHierarchy::write(ostream &os) {
         }
     }
 
-    void
-    Graph::customise_shortcut_graph(ContractionHierarchy &ch, ContractionIndex &tcl, const vector <Edge> &edges) const {
-
-#ifdef MULTI_THREAD_DISTANCES
-        vector<thread> threads;
-        auto chp = [this](ContractionHierarchy &ch, ContractionIndex &tcl,
-                          util::par_bucket_list<NodeID, MULTI_THREAD_DISTANCES> &que, size_t id) {
-
-            NodeID x;
-            while (que.next(x, id)) {
-                for (NodeID z: ch.nodes[x].down_neighbors) {
-                    int i = ch.nodes[x].up_neighbors.size() - 1, j =
-                            ch.nodes[z].up_neighbors.size() - 1, k = UpNeighbor_position(ch, z, x);
-                    while (j > k) {
-                        NodeID a = ch.nodes[x].up_neighbors[i].neighbor, b = ch.nodes[z].up_neighbors[j].neighbor;
-                        if (a != b) i--;
-                        else {
-                            distance_t m = min(ch.nodes[x].up_neighbors[i].distance,
-                                               ch.nodes[z].up_neighbors[j].distance +
-                                               ch.nodes[z].up_neighbors[k].distance);
-                            if (ch.nodes[x].up_neighbors[i].distance > m)
-                                ch.nodes[x].up_neighbors[i].triangle_node = z;
-                            ch.nodes[x].up_neighbors[i].distance = m;
-
-                            FlatCutIndex cx = tcl.get_contraction_label(x).cut_index;
-                            if (cx.label_count() != 0) {
-                                if (cx.distances()[ch.nodes[a].dist_index] > ch.nodes[x].up_neighbors[i].distance)
-                                    cx.paths()[ch.nodes[a].dist_index] = ch.nodes[x].up_neighbors[i].neighbor;
-                                cx.distances()[ch.nodes[a].dist_index] = ch.nodes[x].up_neighbors[i].distance;
-                            }
-                            i--;
-                            j--;
-                        }
-                    }
-                }
-            }
-        };
-#endif
+    void Graph::customise_shortcut_graph(ContractionHierarchy &ch, ContractionIndex &tcl, vector <Edge> &edges) const {
 
         // update graph weights
-        for (const Edge &e: edges) {
+        for (Edge &e: edges) {
             NodeID a = e.a, b = e.b;
+
+            ContractionLabel ca = tcl.get_contraction_label(a);
+            if (ca.root != NO_NODE && ch.nodes[a].up_neighbors[0].neighbor == b) {
+                ch.nodes[a].up_neighbors[0].distance = e.d;
+                continue;
+            }
+            ContractionLabel cb = tcl.get_contraction_label(b);
+            if (cb.root != NO_NODE && ch.nodes[b].up_neighbors[0].neighbor == a) {
+                ch.nodes[b].up_neighbors[0].distance = e.d;
+                continue;
+            }
 
             if (ch.nodes[a].dist_index < ch.nodes[b].dist_index) swap(a, b);
             for (CHNeighbor &n: ch.nodes[a].up_neighbors) {
                 if (n.neighbor == b) {
                     n.distance = e.d;
-                    ContractionLabel ca = tcl.get_contraction_label(a);
-                    if (ca.root == NO_NODE && ca.cut_index.label_count() != 0) {
+                    ca = tcl.get_contraction_label(a);
+                    if (ca.cut_index.label_count() != 0) {
                         ca.cut_index.distances()[ch.nodes[b].dist_index] = e.d;
                         ca.cut_index.paths()[ch.nodes[b].dist_index] = b;
                     }
@@ -1993,6 +1988,41 @@ void ContractionHierarchy::write(ostream &os) {
         }
 
 #ifdef MULTI_THREAD_DISTANCES
+        vector<thread> threads;
+        auto chp = [this](ContractionHierarchy &ch, ContractionIndex &tcl,
+                          util::par_bucket_list<NodeID, MULTI_THREAD_DISTANCES> &que, size_t id) {
+
+            NodeID x;
+            while (que.next(x, id)) {
+                FlatCutIndex cx = tcl.get_contraction_label(x).cut_index;
+
+                for (NodeID z: ch.nodes[x].down_neighbors) {
+                    int i = ch.nodes[x].up_neighbors.size() - 1, j =
+                            ch.nodes[z].up_neighbors.size() - 1, k = UpNeighbor_position(ch, z, x);
+
+                    while (j > k) {
+                        NodeID a = ch.nodes[x].up_neighbors[i].neighbor, b = ch.nodes[z].up_neighbors[j].neighbor;
+
+                        if (a != b) i--;
+                        else {
+                            distance_t m = ch.nodes[z].up_neighbors[j].distance + ch.nodes[z].up_neighbors[k].distance;
+                            if (ch.nodes[x].up_neighbors[i].distance > m) {
+                                ch.nodes[x].up_neighbors[i].triangle_node = z;
+                                ch.nodes[x].up_neighbors[i].distance = m;
+
+                                if (cx.label_count() != 0) {
+                                    cx.paths()[ch.nodes[a].dist_index] = ch.nodes[x].up_neighbors[i].neighbor;
+                                    cx.distances()[ch.nodes[a].dist_index] = ch.nodes[x].up_neighbors[i].distance;
+                                }
+                            }
+                            i--;
+                            j--;
+                        }
+                    }
+                }
+            }
+        };
+
         util::par_bucket_list<NodeID, MULTI_THREAD_DISTANCES> que(ch.nodes[ch.bottom_up_nodes[0]].dist_index, false);
         for (NodeID node: ch.bottom_up_nodes)
             que.push(node, ch.nodes[node].dist_index);
@@ -2004,23 +2034,25 @@ void ContractionHierarchy::write(ostream &os) {
             threads[i].join();
 #else
         for(NodeID x: ch.bottom_up_nodes) {
-            for(NodeID z: ch.nodes[x].down_neighbors) {
+        FlatCutIndex cx = tcl.get_contraction_label(x).cut_index;
 
+            for(NodeID z: ch.nodes[x].down_neighbors) {
                 int i = ch.nodes[x].up_neighbors.size() - 1, j = ch.nodes[z].up_neighbors.size() - 1, k = UpNeighbor_position(ch, z, x);
+
                 while (j > k) {
                     NodeID a = ch.nodes[x].up_neighbors[i].neighbor, b = ch.nodes[z].up_neighbors[j].neighbor;
+
                 if(a != b) i--;
                     else {
-                        distance_t m = min(ch.nodes[x].up_neighbors[i].distance, ch.nodes[z].up_neighbors[j].distance + ch.nodes[z].up_neighbors[k].distance);
-                if(ch.nodes[x].up_neighbors[i].distance > m)
+                        distance_t m = ch.nodes[z].up_neighbors[j].distance + ch.nodes[z].up_neighbors[k].distance;
+                if(ch.nodes[x].up_neighbors[i].distance > m) {
                 ch.nodes[x].up_neighbors[i].triangle_node = z;
-                ch.nodes[x].up_neighbors[i].distance = m;
+                    ch.nodes[x].up_neighbors[i].distance = m;
 
-                FlatCutIndex cx = tcl.get_contraction_label(x).cut_index;
-                        if(cx.label_count() != 0) {
-                if(cx.distances()[ch.nodes[a].dist_index] > ch.nodes[x].up_neighbors[i].distance)
+                            if(cx.label_count() != 0) {
                                 cx.paths()[ch.nodes[a].dist_index] = ch.nodes[x].up_neighbors[i].neighbor;
-                            cx.distances()[ch.nodes[a].dist_index] = ch.nodes[x].up_neighbors[i].distance;
+                                cx.distances()[ch.nodes[a].dist_index] = ch.nodes[x].up_neighbors[i].distance;
+                }
                 }
                         i--; j--;
                     }
@@ -2030,24 +2062,98 @@ void ContractionHierarchy::write(ostream &os) {
 #endif
     }
 
-    void Graph::customise_hub_labelling(const ContractionHierarchy &ch, ContractionIndex &tcl) const {
+    void Graph::customise_shortcut_graph(ContractionHierarchy &ch, vector <Edge> &edges) const {
+
+        // update graph weights
+        for (Edge &e: edges) {
+            NodeID a = e.a, b = e.b;
+
+            if (ch.nodes[a].dist_index < ch.nodes[b].dist_index) swap(a, b);
+            for (CHNeighbor &n: ch.nodes[a].up_neighbors) {
+                if (n.neighbor == b) {
+                    n.distance = e.d;
+                    break;
+                }
+            }
+        }
 
 #ifdef MULTI_THREAD_DISTANCES
         vector<thread> threads;
-        auto tclp = [](const ContractionHierarchy &ch, const ContractionIndex &tcl,
-                       util::par_bucket_list<NodeID, MULTI_THREAD_DISTANCES> &que, size_t id) {
+        auto chp = [this](ContractionHierarchy &ch, util::par_bucket_list<NodeID, MULTI_THREAD_DISTANCES> &que,
+                          size_t id) {
+
+            NodeID x;
+            while (que.next(x, id)) {
+                for (NodeID z: ch.nodes[x].down_neighbors) {
+                    int i = ch.nodes[x].up_neighbors.size() - 1, j =
+                            ch.nodes[z].up_neighbors.size() - 1, k = UpNeighbor_position(ch, z, x);
+                    while (j > k) {
+                        NodeID a = ch.nodes[x].up_neighbors[i].neighbor, b = ch.nodes[z].up_neighbors[j].neighbor;
+                        if (a != b) i--;
+                        else {
+                            distance_t m = ch.nodes[z].up_neighbors[j].distance + ch.nodes[z].up_neighbors[k].distance;
+                            if (ch.nodes[x].up_neighbors[i].distance > m) {
+                                ch.nodes[x].up_neighbors[i].triangle_node = z;
+                                ch.nodes[x].up_neighbors[i].distance = m;
+                            }
+                            i--;
+                            j--;
+                        }
+                    }
+                }
+            }
+        };
+
+        util::par_bucket_list<NodeID, MULTI_THREAD_DISTANCES> que(ch.nodes[ch.bottom_up_nodes[0]].dist_index, false);
+        for (NodeID node: ch.bottom_up_nodes)
+            que.push(node, ch.nodes[node].dist_index);
+
+        // add nodes to queue (pre-compute)
+        for (size_t i = 0; i < MULTI_THREAD_DISTANCES; i++)
+            threads.push_back(thread(chp, std::ref(ch), std::ref(que), i));
+        for (size_t i = 0; i < MULTI_THREAD_DISTANCES; i++)
+            threads[i].join();
+#else
+        for(NodeID x: ch.bottom_up_nodes) {
+            for(NodeID z: ch.nodes[x].down_neighbors) {
+
+                int i = ch.nodes[x].up_neighbors.size() - 1, j = ch.nodes[z].up_neighbors.size() - 1, k = UpNeighbor_position(ch, z, x);
+                while (j > k) {
+                    NodeID a = ch.nodes[x].up_neighbors[i].neighbor, b = ch.nodes[z].up_neighbors[j].neighbor;
+                    if(a != b) i--;
+                    else {
+                distance_t m = ch.nodes[z].up_neighbors[j].distance + ch.nodes[z].up_neighbors[k].distance;
+                        if(ch.nodes[x].up_neighbors[i].distance > m) {
+                            ch.nodes[x].up_neighbors[i].triangle_node = z;
+                            ch.nodes[x].up_neighbors[i].distance = m;
+                }
+                        i--; j--;
+                    }
+                }
+            }
+        }
+#endif
+    }
+
+    void Graph::customise_hub_labelling(ContractionHierarchy &ch, ContractionIndex &tcl) const {
+
+#ifdef MULTI_THREAD_DISTANCES
+        vector<thread> threads;
+        auto tclp = [this](ContractionHierarchy &ch, ContractionIndex &tcl,
+                           util::par_bucket_list<NodeID, MULTI_THREAD_DISTANCES> &que, size_t id) {
 
             NodeID x;
             while (que.next(x, id)) {
                 FlatCutIndex cx = tcl.get_contraction_label(x).cut_index;
                 if (cx.label_count() != 0) {
-                    for (const CHNeighbor &n: ch.nodes[x].up_neighbors) {
+                    for (CHNeighbor &n: ch.nodes[x].up_neighbors) {
                         FlatCutIndex cn = tcl.get_contraction_label(n.neighbor).cut_index;
                         for (size_t anc = 0; anc < cn.dist_index()[cn.cut_level()] - 1; anc++) {
-                            distance_t m = min(cx.distances()[anc], n.distance + cn.distances()[anc]);
-                            if (cx.distances()[anc] > m)
+                            distance_t m = n.distance + cn.distances()[anc];
+                            if (cx.distances()[anc] > m) {
                                 cx.paths()[anc] = n.neighbor;
-                            cx.distances()[anc] = m;
+                                cx.distances()[anc] = m;
+                            }
                         }
                     }
                     cx.distances()[cx.dist_index()[cx.cut_level()] - 1] = 0;
@@ -2069,13 +2175,14 @@ void ContractionHierarchy::write(ostream &os) {
         FlatCutIndex cx = tcl.get_contraction_label(*x).cut_index;
 
             if(cx.label_count() != 0) {
-                for(const CHNeighbor &n: ch.nodes[*x].up_neighbors) {
+                for(CHNeighbor &n: ch.nodes[*x].up_neighbors) {
             FlatCutIndex cn = tcl.get_contraction_label(n.neighbor).cut_index;
                     for(size_t anc = 0; anc < cn.dist_index()[cn.cut_level()] - 1; anc++) {
-                distance_t m = min(cx.distances()[anc], n.distance + cn.distances()[anc]);
-                if(cx.distances()[anc] > m)
+                distance_t m = n.distance + cn.distances()[anc];
+                if(cx.distances()[anc] > m) {
                     cx.paths()[anc] = n.neighbor;
-                cx.distances()[anc] = m;
+                    cx.distances()[anc] = m;
+                }
             }
                 }
 
@@ -2084,25 +2191,68 @@ void ContractionHierarchy::write(ostream &os) {
             }
         }
 #endif
+
+        // customising contracted part
+        for (NodeID x: ch.contracted_nodes) {
+
+            NodeID root = ch.nodes[x].up_neighbors[0].neighbor;
+            distance_t root_dist = ch.nodes[x].up_neighbors[0].distance;
+            while (tcl.get_contraction_label(root).root != NO_NODE) {
+                root_dist += ch.nodes[root].up_neighbors[0].distance;
+                root = ch.nodes[root].up_neighbors[0].neighbor;
+            }
+
+            tcl.update_distance_offset(x, root_dist);
+        }
     }
 
-    void Graph::get_anc_dist(ContractionHierarchy &ch, ContractionIndex &tcl, NodeID v, uint16_t h_max,
-                             std::vector<CHNeighbor> &result) {
+    void Graph::reset(ContractionHierarchy &ch, ContractionIndex &tcl) {
+
+        // reseting ch
+        for (NodeID x: ch.bottom_up_nodes) {
+            for (CHNeighbor &n: ch.nodes[x].up_neighbors) {
+                n.distance = infinity;
+                n.triangle_node = NO_NODE;
+            }
+        }
+
+        for (NodeID x: ch.contracted_nodes) {
+            ch.nodes[x].up_neighbors[0].distance = 0;
+            ch.nodes[x].up_neighbors[0].triangle_node = NO_NODE;
+        }
+
+        // reseting tcl
+        for (NodeID x: ch.bottom_up_nodes) {
+            FlatCutIndex cx = tcl.get_contraction_label(x).cut_index;
+            for (size_t anc = 0; anc < cx.dist_index()[cx.cut_level()]; anc++)
+                cx.distances()[anc] = infinity;
+        }
+
+        for (NodeID x: ch.contracted_nodes)
+            tcl.update_distance_offset(x, infinity);
+    }
+
+    void Graph::get_anc_dist(const ContractionHierarchy &ch, const ContractionIndex &tcl, NodeID v, uint16_t h_max,
+                             vector <QNode> &result) const {
         uint16_t v_height = ch.nodes[v].dist_index;
-        result.resize(v_height + 1, CHNeighbor(NO_NODE, NO_NODE, infinity));
-        result[v_height] = CHNeighbor(v, NO_NODE, 0);
+        result.resize(v_height + 1, QNode(NO_NODE, NO_NODE, infinity));
+        result[v_height] = QNode(v, v, 0);
 
         // no need to check ancestors of root, so h > 0 is ok here
         for (uint16_t h = v_height; h > 0; h--) {
-            CHNeighbor current = result[h];
-            if (current.neighbor == NO_NODE)
+            QNode current = result[h];
+            if (current.anc_node == NO_NODE)
                 continue;
-            FlatCutIndex ci = tcl.get_contraction_label(current.neighbor).cut_index;
+            FlatCutIndex ci = tcl.get_contraction_label(current.anc_node).cut_index;
             if (ci.label_count() == 0) {
-                for (CHNeighbor &n: ch.nodes[current.neighbor].up_neighbors) {
-                    CHNeighbor &anc_result = result[ch.nodes[n.neighbor].dist_index];
-                    anc_result.neighbor = n.neighbor;
-                    anc_result.distance = min(anc_result.distance, current.distance + n.distance);
+                for (const CHNeighbor &n: ch.nodes[current.anc_node].up_neighbors) {
+                    QNode &anc_result = result[ch.nodes[n.neighbor].dist_index];
+                    distance_t new_dist = current.distance + n.distance;
+                    if (anc_result.distance > new_dist) {
+                        anc_result.anc_node = n.neighbor;
+                        anc_result.pre_anc_node = current.anc_node; // for back-tracking how we found this distance value
+                        anc_result.distance = new_dist;
+                    }
                 }
             } else {
                 uint16_t anc_max = min(h, uint16_t(h_max + 1));
@@ -2110,32 +2260,98 @@ void ContractionHierarchy::write(ostream &os) {
                     distance_t new_dist = current.distance + ci.distances()[anc];
                     if (new_dist <= result[anc].distance) {
                         result[anc].distance = new_dist;
-                        result[anc].neighbor = NO_NODE;
+                        result[anc].anc_node = NO_NODE;
+                        result[anc].pre_anc_node = current.anc_node; // again, for back-tracking
                     }
                 }
             }
         }
     }
 
-    const CHNeighbor &Graph::find_shortcut(const ContractionHierarchy &ch, NodeID prev, NodeID current) const {
+// appends path from w (exclusive) to v (inclusive)
+    void Graph::path_from_anc(const ContractionHierarchy &ch, const ContractionIndex &tcl, NodeID v, uint16_t w,
+                              std::vector<QNode> &anc_dist, std::vector<NodeID> &result) const {
+        vector<NodeID> val;
+        NodeID prev = anc_dist[w].pre_anc_node;
+
+        // unpack path segment from current to prev
+        if (tcl.get_contraction_label(prev).cut_index.label_count() == 0) {
+            unpack_valley_path(ch, prev, w, val);
+            reverse(val.begin(), val.end());
+        } else
+            unpack_convex_path(ch, tcl, prev, w, val);
+
+        NodeID current = prev;
+        size_t i = result.size();
+        while (current != v) {
+            NodeID prev = anc_dist[ch.nodes[current].dist_index].pre_anc_node;
+            // unpack path segment from current to prev
+            unpack_valley_path(ch, prev, current, result);
+            current = prev;
+        }
+        reverse(result.begin() + i, result.end());
+        for (NodeID node: val) result.push_back(node);
+    }
+
+    void Graph::find_shortcut(const ContractionHierarchy &ch, NodeID prev, NodeID current, CHNeighbor &n) const {
 
         if (ch.nodes[prev].dist_index < ch.nodes[current].dist_index) swap(prev, current);
-        for (const CHNeighbor &n: ch.nodes[prev].up_neighbors) {
-            if (n.neighbor == current)
-                return n;
+        for (const CHNeighbor &x: ch.nodes[prev].up_neighbors) {
+            if (x.neighbor == current) {
+                n = x;
+                break;
+            }
         }
-        throw runtime_error("No expected shortcut could be found.");
+    }
+
+    void Graph::find_shortcut(const ContractionHierarchy &ch, NodeID prev, uint16_t current, CHNeighbor &n) const {
+
+        for (const CHNeighbor &x: ch.nodes[prev].up_neighbors) {
+            if (ch.nodes[x.neighbor].dist_index == current) {
+                n = x;
+                break;
+            }
+        }
     }
 
 // appends path from w (exclusive) to v (inclusive)
-    void
-    Graph::unpack_valley_path(const ContractionHierarchy &ch, NodeID v, NodeID w, std::vector<NodeID> &result) const {
+    void Graph::unpack_valley_path(const ContractionHierarchy &ch, NodeID v, uint16_t w, std::vector<NodeID> &result) const {
+        vector<NodeID> stack;
+
+        CHNeighbor shortcut(NO_NODE, NO_NODE, infinity);
+        find_shortcut(ch, v, w, shortcut);
+
+        NodeID current = shortcut.neighbor;
+        if (current != NO_NODE)
+            result.push_back(current);
+        if (shortcut.triangle_node == NO_NODE)
+            result.push_back(v);
+        else {
+            stack.push_back(v);
+            stack.push_back(shortcut.triangle_node);
+        }
+
+        while (!stack.empty()) {
+            NodeID prev = stack.back();
+            find_shortcut(ch, prev, current, shortcut);
+            if (shortcut.triangle_node == NO_NODE) {
+                result.push_back(prev);
+                current = prev;
+                stack.pop_back();
+            } else
+                stack.push_back(shortcut.triangle_node);
+        }
+    }
+
+// appends path from w (exclusive) to v (inclusive)
+    void Graph::unpack_valley_path(const ContractionHierarchy &ch, NodeID v, NodeID w, std::vector<NodeID> &result) const {
         vector<NodeID> stack;
         stack.push_back(v);
         NodeID current = w;
+        CHNeighbor shortcut(NO_NODE, NO_NODE, infinity);
         while (!stack.empty()) {
             NodeID prev = stack.back();
-            CHNeighbor shortcut = find_shortcut(ch, prev, current);
+            find_shortcut(ch, prev, current, shortcut);
             if (shortcut.triangle_node == NO_NODE) {
                 result.push_back(prev);
                 current = prev;
@@ -2148,23 +2364,107 @@ void ContractionHierarchy::write(ostream &os) {
 // appends path from w (exclusive) to v (inclusive)
     void Graph::unpack_convex_path(const ContractionHierarchy &ch, const ContractionIndex &tcl, NodeID v, uint16_t w,
                                    vector <NodeID> &result) const {
-        vector<NodeID> temp;
         FlatCutIndex ci = tcl.get_contraction_label(v).cut_index;
         while (ci.dist_index()[ci.cut_level()] - 1 != w) {
-            unpack_valley_path(ch, v, ci.paths()[w], temp);
-            reverse(temp.begin(), temp.end());
-            for (NodeID node: temp) result.push_back(node);
+            size_t i = result.size();
+            unpack_valley_path(ch, v, ci.paths()[w], result);
+            reverse(result.begin() + i, result.end());
             v = ci.paths()[w];
-            temp.clear();
             ci = tcl.get_contraction_label(v).cut_index;
         }
-        result.push_back(ci.paths()[w]);
+        result.push_back(v);
+    }
+
+    void Graph::get_anc_dist(const ContractionHierarchy &ch, NodeID v, std::vector<QNode> &result) const {
+        uint16_t v_height = ch.nodes[v].dist_index;
+        result.resize(v_height + 1, QNode(NO_NODE, NO_NODE, infinity));
+        result[v_height] = QNode(v, v, 0);
+
+        // no need to check ancestors of root, so h > 0 is ok here
+        for (uint16_t h = v_height; h > 0; h--) {
+            QNode current = result[h];
+
+            for (const CHNeighbor &n: ch.nodes[current.anc_node].up_neighbors) {
+                QNode &anc_result = result[ch.nodes[n.neighbor].dist_index];
+                distance_t new_dist = current.distance + n.distance;
+                if (anc_result.distance > new_dist) {
+                    anc_result.anc_node = n.neighbor;
+                    anc_result.pre_anc_node = current.anc_node; // for back-tracking how we found this distance value
+                    anc_result.distance = new_dist;
+                }
+            }
+        }
+    }
+
+// appends path from w (exclusive) to v (inclusive)
+    void Graph::path_from_anc(const ContractionHierarchy &ch, NodeID v, NodeID w, std::vector<QNode> &anc_dist,
+                              std::vector<NodeID> &result) const {
+        NodeID current = w;
+        size_t i = result.size();
+        while (current != v) {
+            NodeID prev = anc_dist[ch.nodes[current].dist_index].pre_anc_node;
+            // unpack path segment from current to prev
+            unpack_valley_path(ch, prev, current, result);
+            current = prev;
+        }
+    }
+
+    vector <NodeID> Graph::query_contraction_hierarchy(const ContractionHierarchy &ch, NodeID v, NodeID w, distance_t& dist) const {
+        std::vector<QNode> v_anc, w_anc;
+        get_anc_dist(ch, v, v_anc);
+        get_anc_dist(ch, w, w_anc);
+
+        distance_t min_dist = infinity;
+        NodeID hub;
+        uint16_t min_height = min(w_anc.size(), v_anc.size());
+        for (uint16_t h = 0; h < min_height; h++) {
+            if (v_anc[h].anc_node == w_anc[h].anc_node) {
+                distance_t new_dist = v_anc[h].distance + w_anc[h].distance;
+                if (min_dist > new_dist) {
+                    hub = v_anc[h].anc_node;
+                    min_dist = new_dist;;
+                }
+            }
+        }
+
+        // creating path
+        std::vector<NodeID> source;
+        path_from_anc(ch, v, hub, v_anc, source);
+        reverse(source.begin(), source.end());
+        source.push_back(hub);
+        path_from_anc(ch, w, hub, w_anc, source);
+
+        /*cout << "Final Path " << endl;
+        for(NodeID node: source) cout << node << " ";
+        cout << endl;*/
+
+        size_t i = 0;
+        NodeID s = source[i], t;
+        distance_t weight = 0;
+        for (i = 1; i < source.size(); i++) {
+            t = source[i];
+            for (Neighbor n: node_data[s].neighbors) {
+                if (n.node == t) {
+                    weight += n.distance;
+                    break;
+                }
+            }
+            s = t;
+        }
+
+//        if (get_distance(v, w, true) != weight)
+//            cout << "***Length: " << weight << endl;
+        dist = min_dist;
+        assert(dist == weight);
+        return source;
     }
 
     vector <NodeID>
-    Graph::query_path(const ContractionHierarchy &ch, const ContractionIndex &tcl, NodeID v, NodeID w, distance_t& dist) const {
+    Graph::query_path(const ContractionHierarchy &ch, const ContractionIndex &tcl, NodeID v, NodeID w, distance_t &dist) const {
         ContractionLabel cv = tcl.get_contraction_label(v), cw = tcl.get_contraction_label(w);
         vector<NodeID> source, target;
+        source.reserve(512);
+        target.reserve(512);
         NodeID v_anc, w_anc;
         assert(!cv.cut_index.empty() && !cw.cut_index.empty());
 
@@ -2229,21 +2529,19 @@ void ContractionHierarchy::write(ostream &os) {
                     w_dist_offset = w_dist_offset - ch.nodes[w_anc].up_neighbors[0].distance;
                     v_dist_offset = v_dist_offset - ch.nodes[v_anc].up_neighbors[0].distance;
                     w_anc = ch.nodes[w_anc].up_neighbors[0].neighbor;
-                    dist += ch.nodes[w_anc].up_neighbors[0].distance;
                     v_anc = ch.nodes[v_anc].up_neighbors[0].neighbor;
+                    dist += ch.nodes[w_anc].up_neighbors[0].distance;
                     dist += ch.nodes[v_anc].up_neighbors[0].distance;
                     target.push_back(w_anc);
                     source.push_back(v_anc);
                 }
             }
 
-            for (auto it = target.rbegin() + 1; it != target.rend(); it++)
-                source.push_back(*it);
+            for (auto it = target.rbegin() + 1; it != target.rend(); it++) source.push_back(*it);
             return source;
         }
 
         distance_t offset = cv.distance_offset + cw.distance_offset;
-
         // contracted case
         if (cv.root != NO_NODE) {
             v_anc = v;
@@ -2263,29 +2561,81 @@ void ContractionHierarchy::write(ostream &os) {
             w = cw.root;
         }
 
-        vector<NodeID> temp;
-        uint16_t lca_height = tcl.common_ancestor_count(v, w);
+        uint16_t lca_height = tcl.common_ancestor_count(v, w), anc, lca;
         distance_t min_dist = infinity;
 
-        auto lca = static_cast<uint16_t>(-1);
-        for (uint16_t anc = 0; anc < lca_height; anc++) {
-            distance_t temp_dist = cv.cut_index.distances()[anc] + cw.cut_index.distances()[anc];
-            if (min_dist > temp_dist) {
-                min_dist = temp_dist;
-                lca = anc;
+        vector<QNode> v_label, w_label;
+        if (cv.cut_index.label_count() != 0 && cw.cut_index.label_count() != 0) {
+            for (anc = 0; anc < lca_height; anc++) {
+                distance_t temp_dist = cv.cut_index.distances()[anc] + cw.cut_index.distances()[anc];
+                if (min_dist > temp_dist) {
+                    min_dist = temp_dist;
+                    lca = anc;
+                }
             }
+
+            unpack_convex_path(ch, tcl, v, lca, source);
+            unpack_convex_path(ch, tcl, w, lca, target);
+        } else if (cv.cut_index.label_count() != 0 && cw.cut_index.label_count() == 0) {
+            get_anc_dist(ch, tcl, w, lca_height, w_label);
+            for (anc = 0; anc < lca_height; anc++) {
+                distance_t temp_dist = cv.cut_index.distances()[anc] + w_label[anc].distance;
+                if (min_dist > temp_dist) {
+                    min_dist = temp_dist;
+                    lca = anc;
+                }
+            }
+            unpack_convex_path(ch, tcl, v, lca, source);
+            path_from_anc(ch, tcl, w, lca, w_label, target);
+        } else if (cv.cut_index.label_count() == 0 && cw.cut_index.label_count() != 0) {
+            get_anc_dist(ch, tcl, v, lca_height, v_label);
+            for (anc = 0; anc < lca_height; anc++) {
+                distance_t temp_dist = v_label[anc].distance + cw.cut_index.distances()[anc];
+                if (min_dist > temp_dist) {
+                    min_dist = temp_dist;
+                    lca = anc;
+                }
+            }
+            path_from_anc(ch, tcl, v, lca, v_label, source);
+            unpack_convex_path(ch, tcl, w, lca, target);
+        } else {
+            get_anc_dist(ch, tcl, w, lca_height, w_label);
+            get_anc_dist(ch, tcl, v, lca_height, v_label);
+            for (anc = 0; anc < lca_height; anc++) {
+                distance_t temp_dist = v_label[anc].distance + w_label[anc].distance;
+                if (min_dist > temp_dist) {
+                    min_dist = temp_dist;
+                    lca = anc;
+                }
+            }
+
+            path_from_anc(ch, tcl, v, lca, v_label, source);
+            path_from_anc(ch, tcl, w, lca, w_label, target);
         }
 
-        unpack_convex_path(ch, tcl, v, lca, temp);
-        for (NodeID node: temp)
-            source.push_back(node);
-        temp.clear();
-        unpack_convex_path(ch, tcl, w, lca, temp);
-        for (NodeID node: temp)
-            target.push_back(node);
+        // combing paths s-lca-t
+        for (auto it = target.rbegin() + 1; it != target.rend(); it++) source.push_back(*it);
 
-        for (auto it = target.rbegin() + 1; it != target.rend(); it++)
-            source.push_back(*it);
+        /*cout << "Final Path " << endl;
+        for(NodeID node: source) cout << node << " ";
+        cout << endl;*/
+
+        size_t i = 0;
+        NodeID s = source[i], t;
+        distance_t weight = 0;
+        for (i = 1; i < source.size(); i++) {
+            t = source[i];
+            for (Neighbor n: node_data[s].neighbors) {
+                if (n.node == t) {
+                    weight += n.distance;
+                    break;
+                }
+            }
+            s = t;
+        }
+
+//        if (get_distance(source[0], source[i - 1], true) != weight)
+//            cout << "***Length: " << weight << endl;
 
         dist = min_dist + offset;
         return source;

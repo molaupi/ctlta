@@ -18,6 +18,7 @@
 #include "Algorithms/TrafficAssignment/Adapters/CCHAdapter.h"
 #include "Algorithms/TrafficAssignment/Adapters/CHAdapter.h"
 #include "Algorithms/TrafficAssignment/Adapters/TTLSAAdapter.h"
+#include "Algorithms/TrafficAssignment/Adapters/TTLSACCHAdapter.h"
 #include "Algorithms/TrafficAssignment/Adapters/DijkstraAdapter.h"
 #include "Algorithms/TrafficAssignment/ObjectiveFunctions/SystemOptimum.h"
 #include "Algorithms/TrafficAssignment/ObjectiveFunctions/UserEquilibrium.h"
@@ -55,7 +56,7 @@ inline void printUsage() {
       "  -f <func>         traversal cost function\n"
       "                      possible values: BPR (default) Davidson M-Davidson inverse\n"
       "  -a <algo>         shortest-path algorithm\n"
-      "                      possible values: Dijkstra Bi-Dijkstra CH CCH (default) TTLSA TTL\n"
+      "                      possible values: Dijkstra Bi-Dijkstra CH CCH (default) TTLSA TTLSACCH TTL\n"
       "  -o <ord>          order in which the OD pairs are processed\n"
       "                      possible values: random input sorted (default)\n"
       "  -U <num>          maximum diameter of a cell (used for ordering OD pairs)\n"
@@ -316,6 +317,9 @@ void chooseShortestPathAlgo(const CommandLineParser& clp) {
     assignTraffic<FWAssignment>(clp);
   } else if (algo == "TTLSA") {
       using FWAssignment = FrankWolfeAssignment<ObjFunctionT, TraversalCostFunctionT, trafficassignment::TTLSAAdapter, Graph>;
+      assignTraffic<FWAssignment>(clp);
+  } else if (algo == "TTLSACCH") {
+      using FWAssignment = FrankWolfeAssignment<ObjFunctionT, TraversalCostFunctionT, trafficassignment::TTLSACCHAdapter, Graph>;
       assignTraffic<FWAssignment>(clp);
   } else if (algo == "TTL") {
       using FWAssignment = FrankWolfeAssignment<ObjFunctionT, TraversalCostFunctionT, trafficassignment::TTLAdapter, Graph>;
