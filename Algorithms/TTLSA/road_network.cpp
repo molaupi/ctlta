@@ -854,11 +854,18 @@ namespace ttlsa::road_network {
 //        }
 
         // reseting tcl
-        for(NodeID x: ch.bottom_up_nodes) {
+        // TODO: Debug
+        for (uint32_t i = 0; i < ch.bottom_up_nodes.size(); ++i) {
+            const NodeID x = ch.bottom_up_nodes[i];
             FlatCutIndex cx = tcl.get_contraction_label(x).cut_index;
             for(size_t anc = 0; anc < cx.dist_index()[cx.cut_level()]; anc++)
                 cx.distances()[anc] = infinity;
         }
+//        for(NodeID x: ch.bottom_up_nodes) {
+//            FlatCutIndex cx = tcl.get_contraction_label(x).cut_index;
+//            for(size_t anc = 0; anc < cx.dist_index()[cx.cut_level()]; anc++)
+//                cx.distances()[anc] = infinity;
+//        }
 
 //        for(NodeID x: ch.contracted_nodes)
 //            tcl.update_distance_offset(x, infinity);

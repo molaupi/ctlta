@@ -75,7 +75,7 @@ namespace trafficassignment {
 
                         tail = head;
                     }
-                    KASSERT(dist == recomputedDist, "dist returned by TTLSA is not correct", 20);
+                    KASSERT(dist == recomputedDist, "dist returned by TTLSACCH is not correct");
 
                     distances[i] = static_cast<int>(dist);
                 }
@@ -110,6 +110,7 @@ namespace trafficassignment {
             assert(inputGraph.isDefrag());
             verifyUndirectedTopology(inputGraph);
         }
+
 // Invoked before the first iteration.
         void preprocess() {
 
@@ -125,9 +126,9 @@ namespace trafficassignment {
             ttlsaGraph.contract(closest, false);
 
             // Build balanced tree hierarchy
-            static constexpr double CUT_BALANCE = 0.2;
-            static constexpr size_t LEAF_SIZE_THRESHOLD = 0;
             std::vector<ttlsa::road_network::CutIndex> cutIndex;
+            static constexpr double CUT_BALANCE = 0.2;
+            static constexpr size_t LEAF_SIZE_THRESHOLD = 0; // CCH only works with THETA = 0.
             ttlsaGraph.create_cut_index(cutIndex, CUT_BALANCE, LEAF_SIZE_THRESHOLD);
 
             // Reset graph to original form before contractions
@@ -148,7 +149,7 @@ namespace trafficassignment {
             // Customize CCH and HL with new metric on edges:
             std::vector<ttlsa::road_network::Edge> edges;
             ttlsaGraph.get_edges(edges);
-            for (auto& e : edges) {
+            for (auto &e: edges) {
                 // TTLSA graph node IDs start at 1
                 const auto tail = e.a - 1;
                 const auto head = e.b - 1;
@@ -178,15 +179,15 @@ namespace trafficassignment {
 
     private:
 
-        static void verifyUndirectedTopology(const InputGraphT& g) {
+        static void verifyUndirectedTopology(const InputGraphT &g) {
             // Graph can be considered undirected if every edge exists both ways.
             FORALL_VALID_EDGES(g, u, e) {
-                const auto eBack = g.uniqueEdgeBetween(g.edgeHead(e), u);
-                KASSERT(eBack >= 0 && eBack < g.numEdges());
-            }
+                    const auto eBack = g.uniqueEdgeBetween(g.edgeHead(e), u);
+                    KASSERT(eBack >= 0 && eBack < g.numEdges());
+                }
         }
 
-        static void verifyUndirectedWeights(const InputGraphT& g) {
+        static void verifyUndirectedWeights(const InputGraphT &g) {
             // Graph can be considered undirected if every edge exists both ways and the weight is the same both ways.
             FORALL_VALID_EDGES(g, u, e) {
                     KASSERT(g.template get<WeightT>(e) != WeightT::defaultValue());

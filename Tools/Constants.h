@@ -29,3 +29,8 @@ constexpr int EARTH_RADIUS = 6371000;
 #ifndef DC_MAX_NUM_SOURCES
 # define DC_MAX_NUM_SOURCES std::numeric_limits<int>::max()
 #endif
+
+// The maximum number of vertices in a truncated subtree for truncated tree labelling.
+#ifndef TA_TTL_THETA
+#define TA_TTL_THETA 0
+#endif

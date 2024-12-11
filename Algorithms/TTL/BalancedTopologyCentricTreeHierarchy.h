@@ -7,9 +7,7 @@
 #include "DataStructures/Partitioning/SeparatorTree.h"
 #include "Algorithms/CCH/CCHMetric.h"
 
-#ifndef TA_TTL_THETA
-#define TA_TTL_THETA 0
-#endif
+#include "Tools/Constants.h"
 
 class BalancedTopologyCentricTreeHierarchy {
 
