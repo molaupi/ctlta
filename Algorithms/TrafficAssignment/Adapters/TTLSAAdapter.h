@@ -22,7 +22,7 @@ namespace trafficassignment {
     template<typename InputGraphT, typename WeightT>
     class TTLSAAdapter {
 
-        static constexpr uint32_t MaxTruncatedSubtreeSize = TA_TTL_THETA;
+        static constexpr uint32_t MaxTruncatedSubtreeSize = TTL_THETA;
 
     public:
 

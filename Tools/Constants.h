@@ -31,6 +31,6 @@ constexpr int EARTH_RADIUS = 6371000;
 #endif
 
 // The maximum number of vertices in a truncated subtree for truncated tree labelling.
-#ifndef TA_TTL_THETA
-#define TA_TTL_THETA 0
+#ifndef TTL_THETA
+#define TTL_THETA 0
 #endif

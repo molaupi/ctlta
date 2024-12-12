@@ -11,7 +11,7 @@
 
 class BalancedTopologyCentricTreeHierarchy {
 
-    static constexpr uint32_t MaxTruncatedSubtreeSize = TA_TTL_THETA;
+    static constexpr uint32_t MaxTruncatedSubtreeSize = TTL_THETA;
 
 public:
 
@@ -60,7 +60,6 @@ public:
 
     // Expects ranks in the CCH-order as inputs.
     uint32_t getLowestCommonHub(const int32_t &s, const int32_t &t) const {
-//        const auto minNumHubs = std::min(numHubs[s], numHubs[t]);
 
         // XOR packed side IDs to find out lowest common level in separator hierarchy.
         const int l = lowestOneBit(packedSideIds[s] ^ packedSideIds[t]);
@@ -75,23 +74,6 @@ public:
         KASSERT(l2 < firstSepSizeSum[s + 1] - firstSepSizeSum[s]);
         KASSERT(l2 < firstSepSizeSum[t + 1] - firstSepSizeSum[t]);
         return std::min(sepSizeSumsOnBranch[firstSepSizeSum[s] + l2], sepSizeSumsOnBranch[firstSepSizeSum[t] + l2]);
-
-//        const auto twoToTheL = 1 << l;
-//
-//        // packedSideIds[s] and packedSideIds[t] are identical from bit 0 to bit l-1 (counting from least
-//        // significant).
-//        const auto commonLowerBits = (packedSideIds[s] & (twoToTheL - 1));
-//        KASSERT(commonLowerBits == (packedSideIds[t] & (twoToTheL - 1)));
-//
-//        // Number of common hubs is defined by sum of size of separators up to and including separator that
-//        // separates s and t (LCA in separator hierarchy).
-//        // We find the separator hierarchy node representing this separator and read this value which is stored
-//        // for every separator node in sepSizeSum.
-//
-//        // Find index of separator hierarchy node that contains the LCA:
-//        // Level of SH node is l. Packed side ID of LCA SH node is commonLowerBits.
-//        const auto &sepSizeSum = getSepSizeSum(l, commonLowerBits);
-//        return std::min(sepSizeSum, minNumHubs);
     }
 
     // Return whether vertex is truncated in which case it does not have a label.
@@ -218,30 +200,6 @@ private:
 
         return doTruncate;
     }
-
-//    // Maps a depth and the packed side ID of a node to a unique node index.
-//    static uint64_t idxInSepSizeSum(const uint32_t depth, const uint64_t packedSideIdAtNode) {
-//        KASSERT((packedSideIdAtNode & (static_cast<uint64_t>(-1) << depth)) == 0);
-//        return (1 << depth) - 1 + packedSideIdAtNode;
-//    }
-
-//    // Set sum of sizes of separators on hierarchy branch up to separator hierarchy node (including size of separator
-//    // of node itself). Node is specified by depth and packedSideId.
-//    void setSepSizeSum(const uint32_t depth, const uint64_t packedSideId, const uint32_t sumSizes) {
-//        const auto idx = idxInSepSizeSum(depth, packedSideId);
-//        KASSERT(idx < sepSizeSum.capacity());
-//        if (idx >= sepSizeSum.size())
-//            sepSizeSum.resize(idx + 1, 0);
-//        sepSizeSum[idx] = sumSizes;
-//    }
-//
-//    // Get sum of sizes of separators on hierarchy branch up to separator hierarchy node (including size of separator
-//    // of node itself). Node is specified by depth and packedSideId.
-//    const uint32_t &getSepSizeSum(const uint32_t depth, const uint64_t packedSideId) const {
-//        const auto idx = idxInSepSizeSum(depth, packedSideId);
-//        KASSERT(idx < sepSizeSum.size());
-//        return sepSizeSum[idx];
-//    }
 
 
     // Finds depth, side bitvector, and truncation flag of each vertex.
@@ -410,7 +368,6 @@ private:
 
 
 
-//    std::vector<uint32_t> numHubs; // For each vertex, stores number of hubs in label of vertex
     std::vector<uint64_t> packedSideIds; // store which side each vertex is on in each level of separator hierarchy
     BitVector truncateVertex; // If truncateVertex[v], vertex v is truncated and should not get a label
 
@@ -425,10 +382,5 @@ private:
     // sep size sums for vertex v are stored at sepSizeSumsOnBranch[firstSepSizeSum[v]..firstSepSizeSum[v+1]].
     std::vector<uint32_t> firstSepSizeSum;
     std::vector<uint32_t> sepSizeSumsOnBranch;
-
-//    // For each separator node, we have to store the sum of sizes of separators on the hierarchy branch up to the node.
-//    // These values need to be retrieved on the basis of a depth and the packedSideSum of the node.
-//    // We map depth and packedSideSum of a node to a unique index and store the sep size sum at that index.
-//    std::vector<uint32_t> sepSizeSum;
 };
 

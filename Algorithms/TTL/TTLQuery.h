@@ -4,7 +4,7 @@
 #include "Algorithms/TTL/TruncatedTreeLabelling.h"
 #include "Algorithms/Dijkstra/DagShortestPaths.h"
 
-template<typename SearchGraphT>
+template<typename SearchGraphT, typename LabellingT>
 class TTLQuery {
 
 
@@ -15,7 +15,8 @@ class TTLQuery {
 
         void init(const size_t numHubs) {
             dists.assign(numHubs, INFTY);
-            accessVertices.assign(numHubs, INVALID_VERTEX);
+            if constexpr (LabellingT::StoresPathPointers)
+                accessVertices.assign(numHubs, INVALID_VERTEX);
         }
 
         const int32_t &dist(const uint32_t &hubIdx) const {
@@ -28,11 +29,13 @@ class TTLQuery {
             return dists[hubIdx];
         }
 
+        template<bool hasPathEdges = LabellingT::StoresPathPointers, std::enable_if_t<hasPathEdges>...>
         const int32_t &accessVertex(const uint32_t &hubIdx) const {
             KASSERT(hubIdx < numHubs());
             return accessVertices[hubIdx];
         }
 
+        template<bool hasPathEdges = LabellingT::StoresPathPointers, std::enable_if_t<hasPathEdges>...>
         int32_t &accessVertex(const uint32_t &hubIdx) {
             KASSERT(hubIdx < numHubs());
             return accessVertices[hubIdx];
@@ -53,7 +56,7 @@ class TTLQuery {
         PruneSearchAtUntruncatedVertices(TemporaryLabel &temporaryLabel,
                                          std::vector<int32_t> &truncatedSearchSpace,
                                          const BalancedTopologyCentricTreeHierarchy &hierarchy,
-                                         const TruncatedTreeLabelling &ttl)
+                                         const LabellingT &ttl)
                 : temporaryLabel(temporaryLabel), truncatedSearchSpace(truncatedSearchSpace), hierarchy(hierarchy),
                   ttl(ttl) {}
 
@@ -73,7 +76,8 @@ class TTLQuery {
                 const auto distViaV = distToV[0] + labelOfV.dist(i);
                 if (distViaV < temporaryLabel.dist(i)) {
                     temporaryLabel.dist(i) = distViaV;
-                    temporaryLabel.accessVertex(i) = v;
+                    if constexpr (LabellingT::StoresPathPointers)
+                        temporaryLabel.accessVertex(i) = v;
                 }
             }
 
@@ -84,7 +88,7 @@ class TTLQuery {
         TemporaryLabel &temporaryLabel;
         std::vector<int32_t> &truncatedSearchSpace;
         const BalancedTopologyCentricTreeHierarchy &hierarchy;
-        const TruncatedTreeLabelling &ttl;
+        const LabellingT &ttl;
     };
 
     using TruncatedVertexUpwardSearch = DagShortestPaths<SearchGraphT, BasicLabelSet<0, ParentInfo::FULL_PARENT_INFO>, PruneSearchAtUntruncatedVertices<true>>;
@@ -96,7 +100,7 @@ public:
              const SearchGraphT &downGraph,
              int const * const upWeights,
              int const * const downWeights,
-             const TruncatedTreeLabelling &ttl)
+             const LabellingT &ttl)
             : hierarchy(hierarchy), upGraph(upGraph), downGraph(downGraph), ttl(ttl),
               buildUpLabelSearch(upGraph, upWeights,
                                  {tempUpLabel, upTruncatedSearchSpace, hierarchy, ttl}),
@@ -157,6 +161,7 @@ public:
 
     // Returns the CCH edges in the upward graph on the up segment of the up-down path (in reverse order to conform to
     // default orientation in graph-traversal-based searches).
+    template<bool hasPathEdges = LabellingT::StoresPathPointers, std::enable_if_t<hasPathEdges>...>
     const std::vector<int32_t> &getUpEdgePath() {
         lastUpPath.clear();
 
@@ -192,6 +197,7 @@ public:
     }
 
     // Returns the CCH edges in the upward graph on the down segment of the up-down path.
+    template<bool hasPathEdges = LabellingT::StoresPathPointers, std::enable_if_t<hasPathEdges>...>
     const std::vector<int32_t> &getDownEdgePath() {
         lastDownPath.clear();
 
@@ -265,7 +271,7 @@ private:
     const BalancedTopologyCentricTreeHierarchy &hierarchy;
     const SearchGraphT &upGraph;
     const SearchGraphT &downGraph;
-    const TruncatedTreeLabelling &ttl;
+    const LabellingT &ttl;
 
     int32_t lastS;
     int32_t lastT;

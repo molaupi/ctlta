@@ -277,12 +277,13 @@ inline void runQueries(const CommandLineParser& clp) {
       BalancedTopologyCentricTreeHierarchy treeHierarchy;
       treeHierarchy.preprocess(graph, sepDecomp);
 
-      TruncatedTreeLabelling ttl(treeHierarchy);
+      using LabellingT = TruncatedTreeLabelling<>;
+      LabellingT ttl(treeHierarchy);
       ttl.init();
 
 
 
-                TTLMetric<> metric(treeHierarchy, cch, useLengths? &graph.length(0) : &graph.travelTime(0));
+                TTLMetric<LabellingT> metric(treeHierarchy, cch, useLengths? &graph.length(0) : &graph.travelTime(0));
       metric.buildCustomizedTTL(ttl);
 
       outputFile << "# Graph: " << graphFileName << '\n';
@@ -291,7 +292,7 @@ inline void runQueries(const CommandLineParser& clp) {
       static constexpr uint64_t BYTES_PER_MB = 1 << 20;
       outputFile << "# Mem hierarchy = " << treeHierarchy.sizeInBytes() / BYTES_PER_MB << " MB, Mem labelling = " << ttl.sizeInBytes() / BYTES_PER_MB << " MB" << '\n';
 
-      TTLQuery<TTLMetric<>::SearchGraph> algo(treeHierarchy, metric.upwardGraph(), metric.downwardGraph(), metric.upwardWeights(),
+      TTLQuery<TTLMetric<LabellingT>::SearchGraph, LabellingT> algo(treeHierarchy, metric.upwardGraph(), metric.downwardGraph(), metric.upwardWeights(),
                                               metric.downwardWeights(), ttl);
       runQueries(algo, demandFileName, outputFile, [&](const int v) { return cch.getRanks()[v]; });
   } else {
@@ -498,7 +499,8 @@ inline void runPreprocessing(const CommandLineParser& clp) {
 
       BalancedTopologyCentricTreeHierarchy treeHierarchy;
       treeHierarchy.preprocess(graph, decomp);
-      TruncatedTreeLabelling ttl(treeHierarchy);
+      using LabellingT = TruncatedTreeLabelling<>;
+      LabellingT ttl(treeHierarchy);
         ttl.init();
 
       Timer timer;
@@ -515,7 +517,7 @@ inline void runPreprocessing(const CommandLineParser& clp) {
               cchCustom = timer.elapsed<std::chrono::microseconds>();
           }
           {
-              TTLMetric<TTL_USE_PERFECT_CUSTOMIZATION> metric(treeHierarchy, cch, &graph.travelTime(0));
+              TTLMetric<LabellingT, TTL_USE_PERFECT_CUSTOMIZATION> metric(treeHierarchy, cch, &graph.travelTime(0));
               timer.restart();
               metric.buildCustomizedTTL(ttl);
               tot = timer.elapsed<std::chrono::microseconds>();

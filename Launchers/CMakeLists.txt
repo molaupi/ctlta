@@ -1,3 +1,21 @@
+# Compile time parameters for the TTL shortest path algorithm
+set(TTL_THETA "" CACHE STRING "Choose the maximum size of truncated subtrees int TruncatedTreeLabelling.")
+option(TTL_USE_PERFECT_CUSTOMIZATION "Use perfect customization in CCH on which TTL is based." OFF)
+option(TTL_STORE_PATH_POINTERS "Store parent pointers in TTL to allow path retrieval." ON)
+set(VAL_TTL_THETA 0)
+if(NOT TTL_THETA STREQUAL "")
+  set(VAL_TTL_THETA ${TTL_THETA})
+endif()
+set(VAL_TTL_USE_PERFECT_CUSTOMIZATION "false")
+if (TTL_USE_PERFECT_CUSTOMIZATION)
+  set(VAL_TTL_USE_PERFECT_CUSTOMIZATION "true")
+endif()
+set(VAL_TTL_STORE_PATH_POINTERS "true")
+if (NOT TTL_STORE_PATH_POINTERS)
+  set(VAL_TTL_STORE_PATH_POINTERS "false")
+endif()
+
+# AssignTraffic target
 add_executable(AssignTraffic AssignTraffic.cc)
 target_compile_definitions(AssignTraffic PRIVATE CSV_IO_NO_THREAD)
 target_compile_options(AssignTraffic PRIVATE ${FULL_WARNINGS})
@@ -17,8 +35,6 @@ endif()
 option(TA_USE_CFW "Make each descent direction conjugate to the last direction." ON)
 option(TA_USE_SIMD_SEARCH "Use SIMD optimizations for the centralized shortest-path search." ON)
 set(TA_LOG_K "" CACHE STRING "Choose the number of simultaneous shortest-path computations.")
-set(TA_TTL_THETA "" CACHE STRING "Choose the maximum size of truncated subtrees int TruncatedTreeLabelling.")
-option(TTL_USE_PERFECT_CUSTOMIZATION "Use perfect customization in CCH on which TTL is based." OFF)
 
 if(NOT TA_USE_CFW)
   target_compile_definitions(AssignTraffic PRIVATE TA_NO_CFW)
@@ -29,19 +45,12 @@ endif()
 if(NOT TA_LOG_K STREQUAL "")
   target_compile_definitions(AssignTraffic PRIVATE TA_LOG_K=${TA_LOG_K})
 endif()
-if(NOT TA_TTL_THETA STREQUAL "")
-  target_compile_definitions(AssignTraffic PRIVATE TA_TTL_THETA=${TA_TTL_THETA})
-endif()
-if (TTL_USE_PERFECT_CUSTOMIZATION)
-  target_compile_definitions(AssignTraffic PRIVATE TTL_USE_PERFECT_CUSTOMIZATION=true)
-else()
-  target_compile_definitions(AssignTraffic PRIVATE TTL_USE_PERFECT_CUSTOMIZATION=false)
-endif()
+target_compile_definitions(AssignTraffic PRIVATE TTL_THETA=${VAL_TTL_THETA})
+target_compile_definitions(AssignTraffic PRIVATE TTL_USE_PERFECT_CUSTOMIZATION=${VAL_TTL_USE_PERFECT_CUSTOMIZATION})
+target_compile_definitions(AssignTraffic PRIVATE TTL_STORE_PATH_POINTERS=${VAL_TTL_STORE_PATH_POINTERS})
 
 
-
-
-
+# CalculateDemand target
 add_executable(
     CalculateDemand CalculateDemand.cc
     ../External/randomc/mersenne.cpp ../External/randomc/userintf.cpp ../External/stocc/stoc1.cpp)
@@ -56,12 +65,13 @@ if(NOT DC_MAX_NUM_SOURCES STREQUAL "")
   target_compile_definitions(CalculateDemand PRIVATE DC_MAX_NUM_SOURCES=${DC_MAX_NUM_SOURCES})
 endif()
 
+# RunP2PAlgo target
 add_executable(RunP2PAlgo RunP2PAlgo.cc)
 target_compile_definitions(RunP2PAlgo PRIVATE CSV_IO_NO_THREAD)
 target_link_libraries(RunP2PAlgo routingkit kassert vectorclass fast_cpp_csv_parser)
-if(NOT TA_TTL_THETA STREQUAL "")
-  target_compile_definitions(RunP2PAlgo PRIVATE TA_TTL_THETA=${TA_TTL_THETA})
-endif()
+target_compile_definitions(RunP2PAlgo PRIVATE TTL_THETA=${VAL_TTL_THETA})
+target_compile_definitions(RunP2PAlgo PRIVATE TTL_USE_PERFECT_CUSTOMIZATION=${VAL_TTL_USE_PERFECT_CUSTOMIZATION})
+target_compile_definitions(RunP2PAlgo PRIVATE TTL_STORE_PATH_POINTERS=${VAL_TTL_STORE_PATH_POINTERS})
 if(OpenMP_FOUND)
   target_link_libraries(RunP2PAlgo OpenMP::OpenMP_CXX)
 endif()
@@ -71,6 +81,7 @@ if(NOT USE_FAST_ELIMINATION_TREE_QUERY)
   target_compile_definitions(RunP2PAlgo PRIVATE NO_FAST_ELIMINATION_TREE_QUERY)
 endif()
 
+# RunPoiAlgo target
 add_executable(RunPoiAlgo RunPoiAlgo.cc)
 target_link_libraries(RunPoiAlgo ${RoutingKit_LIBRARY})
 if(OpenMP_FOUND)

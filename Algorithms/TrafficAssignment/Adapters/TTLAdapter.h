@@ -24,7 +24,8 @@ namespace trafficassignment {
     template<typename InputGraphT, typename WeightT>
     class TTLAdapter {
 
-        using TTLMetricT = TTLMetric<>;
+        using LabellingT = TruncatedTreeLabelling<true>;
+        using TTLMetricT = TTLMetric<LabellingT>;
 
     public:
 
@@ -39,7 +40,7 @@ namespace trafficassignment {
         class QueryAlgo {
         public:
             // Constructs a query algorithm instance working on the specified data.
-            QueryAlgo(const BalancedTopologyCentricTreeHierarchy &hierarchy, const TruncatedTreeLabelling &ttl,
+            QueryAlgo(const BalancedTopologyCentricTreeHierarchy &hierarchy, const LabellingT &ttl,
                       const TTLMetricT &metric,
                       const Permutation &ranks,
                       AlignedVector<int> &flowsOnUpEdges, AlignedVector<int> &flowsOnDownEdges) :
@@ -114,7 +115,7 @@ namespace trafficassignment {
             const TTLMetricT::SearchGraph &upGraph;
             const TTLMetricT::SearchGraph &downGraph;
             const Permutation &ranks; // rank[v] is the rank of vertex v in the contraction order
-            TTLQuery <TTLMetricT::SearchGraph> ttlQuery;
+            TTLQuery <TTLMetricT::SearchGraph, LabellingT> ttlQuery;
             std::array<int, K> distances; // distances computed in last call to run()
 
             AlignedVector<int> &flowsOnUpEdges;     // The flows in the upward graph.
@@ -329,7 +330,7 @@ namespace trafficassignment {
         BalancedTopologyCentricTreeHierarchy treeHierarchy; // Tree hierarchy underlying TTL
         CCH cch;                      // The metric-independent CCH.
         TTLMetricT metric;      // The current metric for the CCH.
-        TruncatedTreeLabelling ttl;   // The customized tree labelling.
+        LabellingT ttl;   // The customized tree labelling.
 
         AlignedVector<int> flowsOnUpEdges;   // The flows on the edges in the upward graph.
         AlignedVector<int> flowsOnDownEdges; // The flows on the edges in the downward graph.

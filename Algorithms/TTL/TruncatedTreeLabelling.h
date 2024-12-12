@@ -2,11 +2,18 @@
 
 #include "Algorithms/TTL/BalancedTopologyCentricTreeHierarchy.h"
 
+#ifndef TTL_STORE_PATH_POINTERS
+#define TTL_STORE_PATH_POINTERS true
+#endif
+
+template<bool StorePathPointers = TTL_STORE_PATH_POINTERS>
 class TruncatedTreeLabelling {
 
     static constexpr uint64_t INVALID_OFFSET = static_cast<uint64_t>(-1);
 
 public:
+
+    static const bool StoresPathPointers = StorePathPointers;
 
     struct ConstLabel {
 
@@ -15,6 +22,7 @@ public:
             return startOfLabel[hubIdx];
         }
 
+        template<bool hasPathEdges = StorePathPointers, std::enable_if_t<hasPathEdges>...>
         const int32_t &pathEdge(const uint32_t &hubIdx) const {
             KASSERT(hubIdx < numHubs);
             return startOfLabel[numHubs + hubIdx];
@@ -35,11 +43,13 @@ public:
             return startOfLabel[hubIdx];
         }
 
+        template<bool hasPathEdges = StorePathPointers, std::enable_if_t<hasPathEdges>...>
         const int32_t &pathEdge(const uint32_t &hubIdx) const {
             KASSERT(hubIdx < numHubs);
             return startOfLabel[numHubs + hubIdx];
         }
 
+        template<bool hasPathEdges = StorePathPointers, std::enable_if_t<hasPathEdges>...>
         inline int32_t &pathEdge(const uint32_t &hubIdx) {
             KASSERT(hubIdx < numHubs);
             return startOfLabel[numHubs + hubIdx];
@@ -62,7 +72,9 @@ public:
             if (hierarchy.isVertexTruncated(v))
                 continue;
             labelOffsets[v] = offset;
-            offset += 2 * hierarchy.getNumHubs(v); // numHubs entries for distances and numHubs entries for path edge pointers
+            offset += hierarchy.getNumHubs(v); // one distance entry per hub
+            if constexpr (StorePathPointers)
+                offset += hierarchy.getNumHubs(v); // one path edge per hub
         }
         upLabelData.resize(offset, INFTY);
         downLabelData.resize(offset, INFTY);
@@ -114,11 +126,13 @@ public:
         return upLabelData[labelOffsets[v] + hubIdx];
     }
 
+    template<bool hasPathEdges = StorePathPointers, std::enable_if_t<hasPathEdges>...>
     inline int32_t &upPathEdge(const int32_t &v, const uint32_t &hubIdx) {
         KASSERT(labelOffsets[v] != INVALID_OFFSET);
         return upLabelData[labelOffsets[v] + hierarchy.getNumHubs(v) + hubIdx];
     }
 
+    template<bool hasPathEdges = StorePathPointers, std::enable_if_t<hasPathEdges>...>
     const int32_t &upPathEdge(const int32_t &v, const uint32_t &hubIdx) const {
         KASSERT(labelOffsets[v] != INVALID_OFFSET);
         return upLabelData[labelOffsets[v] + hierarchy.getNumHubs(v) + hubIdx];
@@ -134,11 +148,13 @@ public:
         return downLabelData[labelOffsets[v] + hubIdx];
     }
 
+    template<bool hasPathEdges = StorePathPointers, std::enable_if_t<hasPathEdges>...>
     inline int32_t &downPathEdge(const int32_t &v, const uint32_t &hubIdx) {
         KASSERT(labelOffsets[v] != INVALID_OFFSET);
         return downLabelData[labelOffsets[v] + hierarchy.getNumHubs(v) + hubIdx];
     }
 
+    template<bool hasPathEdges = StorePathPointers, std::enable_if_t<hasPathEdges>...>
     const int32_t &downPathEdge(const int32_t &v, const uint32_t &hubIdx) const {
         KASSERT(labelOffsets[v] != INVALID_OFFSET);
         return downLabelData[labelOffsets[v] + hierarchy.getNumHubs(v) + hubIdx];
@@ -156,9 +172,9 @@ public:
     }
 
     uint64_t sizeInBytes() const {
-        return labelOffsets.size() * sizeof(decltype(labelOffsets)::value_type)
-               + upLabelData.size() * sizeof(decltype(upLabelData)::value_type)
-               + downLabelData.size() * sizeof(decltype(downLabelData)::value_type);
+        return labelOffsets.size() * sizeof(typename decltype(labelOffsets)::value_type)
+               + upLabelData.size() * sizeof(typename decltype(upLabelData)::value_type)
+               + downLabelData.size() * sizeof(typename decltype(downLabelData)::value_type);
     }
 
 private:

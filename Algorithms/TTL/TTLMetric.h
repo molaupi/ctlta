@@ -10,7 +10,7 @@
 
 
 // An individual metric for truncated tree labelling. Uses a CCH to build customized hub labelling.
-template<bool USE_PERFECT_CUSTOMIZATION = TTL_USE_PERFECT_CUSTOMIZATION>
+template<typename LabellingT, bool USE_PERFECT_CUSTOMIZATION = TTL_USE_PERFECT_CUSTOMIZATION>
 class TTLMetric {
 
 public:
@@ -22,7 +22,7 @@ public:
     TTLMetric(const BalancedTopologyCentricTreeHierarchy &hierarchy, const CCH &cch, const int32_t *const inputWeights)
             : hierarchy(hierarchy), cch(cch), cchMetric(cch, inputWeights), minimumWeightedCH() {}
 
-    void buildCustomizedTTL(TruncatedTreeLabelling &ttl) {
+    void buildCustomizedTTL(LabellingT &ttl) {
         if constexpr (USE_PERFECT_CUSTOMIZATION)
             minimumWeightedCH = cchMetric.buildMinimumWeightedCH();
         else
@@ -66,7 +66,7 @@ public:
 
 private:
 
-    void customizeLabelling(TruncatedTreeLabelling &ttl) {
+    void customizeLabelling(LabellingT &ttl) {
         ttl.reset();
         const auto &upGraph = upwardGraph();
         const auto &downGraph = downwardGraph(); // reverse downward graph
@@ -85,7 +85,8 @@ private:
 
             // Customize upward label of u using upper neighbors
             ttl.upDist(u, numHubsU - 1) = 0; // distance to self
-            ttl.upPathEdge(u, numHubsU - 1) = INVALID_EDGE; // edge to self
+            if constexpr (LabellingT::StoresPathPointers)
+                ttl.upPathEdge(u, numHubsU - 1) = INVALID_EDGE; // edge to self
             FORALL_INCIDENT_EDGES(upGraph, u, e) {
                 const auto v = upGraph.edgeHead(e);
                 const auto upWeight = upWeights[e];
@@ -95,17 +96,23 @@ private:
                 // TODO: SIMD-ify
                 auto uUpLabel = ttl.upLabel(u);
                 const auto vUpLabel = ttl.cUpLabel(v);
-                for (uint32_t i = 0; i < numHubsV; ++i) {
-                    if (uUpLabel.dist(i) > upWeight + vUpLabel.dist(i)) {
-                        uUpLabel.dist(i) = upWeight + vUpLabel.dist(i);
-                        uUpLabel.pathEdge(i) = e;
+                if constexpr (LabellingT::StoresPathPointers) {
+                    for (uint32_t i = 0; i < numHubsV; ++i) {
+                        if (uUpLabel.dist(i) > upWeight + vUpLabel.dist(i)) {
+                            uUpLabel.dist(i) = upWeight + vUpLabel.dist(i);
+                            uUpLabel.pathEdge(i) = e;
+                        }
                     }
+                } else {
+                    for (uint32_t i = 0; i < numHubsV; ++i)
+                        uUpLabel.dist(i) = std::min(uUpLabel.dist(i), upWeight + vUpLabel.dist(i));
                 }
             }
 
             // Customize (reverse) downward label of u using upper neighbors
             ttl.downDist(u, numHubsU - 1) = 0; // distance to self
-            ttl.downPathEdge(u, numHubsU - 1) = INVALID_EDGE; // edge to self
+            if constexpr (LabellingT::StoresPathPointers)
+                ttl.downPathEdge(u, numHubsU - 1) = INVALID_EDGE; // edge to self
             FORALL_INCIDENT_EDGES(downGraph, u, e) {
                 const auto v = downGraph.edgeHead(e);
                 const auto downWeight = downWeights[e];
@@ -115,11 +122,16 @@ private:
                 // TODO: SIMD-ify
                 auto uDownLabel = ttl.downLabel(u);
                 const auto vDownLabel = ttl.cDownLabel(v);
-                for (uint32_t i = 0; i < numHubsV; ++i) {
-                    if (uDownLabel.dist(i) > downWeight + vDownLabel.dist(i)) {
-                        uDownLabel.dist(i) = downWeight + vDownLabel.dist(i);
-                        uDownLabel.pathEdge(i) = e;
+                if constexpr (LabellingT::StoresPathPointers) {
+                    for (uint32_t i = 0; i < numHubsV; ++i) {
+                        if (uDownLabel.dist(i) > downWeight + vDownLabel.dist(i)) {
+                            uDownLabel.dist(i) = downWeight + vDownLabel.dist(i);
+                            uDownLabel.pathEdge(i) = e;
+                        }
                     }
+                } else {
+                    for (uint32_t i = 0; i < numHubsV; ++i)
+                        uDownLabel.dist(i) = std::min(uDownLabel.dist(i), downWeight + vDownLabel.dist(i));
                 }
             }
         });
