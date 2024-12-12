@@ -1,5 +1,5 @@
-#include "road_network.h"
-#include "util.h"
+#include <ttlsa/road_network.h>
+#include <ttlsa/util.h>
 
 #include <vector>
 #include <queue>
@@ -825,8 +825,8 @@ namespace ttlsa::road_network {
     void Graph::resetSpDatastructures(ContractionHierarchy &ch) const {
 
         // reseting ch
-        for(NodeID x: ch.bottom_up_nodes) {
-            for(CHNeighbor &n: ch.nodes[x].up_neighbors) {
+        for (NodeID x: ch.bottom_up_nodes) {
+            for (CHNeighbor &n: ch.nodes[x].up_neighbors) {
                 n.distance = infinity;
                 n.triangle_node = NO_NODE;
             }
@@ -841,8 +841,8 @@ namespace ttlsa::road_network {
     void Graph::resetSpDatastructures(ContractionHierarchy &ch, ContractionIndex &tcl) const {
 
         // reseting ch
-        for(NodeID x: ch.bottom_up_nodes) {
-            for(CHNeighbor &n: ch.nodes[x].up_neighbors) {
+        for (const NodeID &x: ch.bottom_up_nodes) {
+            for (CHNeighbor &n: ch.nodes[x].up_neighbors) {
                 n.distance = infinity;
                 n.triangle_node = NO_NODE;
             }
@@ -852,13 +852,14 @@ namespace ttlsa::road_network {
 //            ch.nodes[x].up_neighbors[0].distance = 0;
 //            ch.nodes[x].up_neighbors[0].triangle_node = NO_NODE;
 //        }
+//            std::cout << "Rank " << i << ": " << std::none_of(ch.bottom_up_nodes.begin(), ch.bottom_up_nodes.end(), [&](const auto& v) {return v == 4286578687;}) << std::endl;
 
         // reseting tcl
         // TODO: Debug
         for (uint32_t i = 0; i < ch.bottom_up_nodes.size(); ++i) {
-            const NodeID x = ch.bottom_up_nodes[i];
+            const NodeID &x = ch.bottom_up_nodes[i];
             FlatCutIndex cx = tcl.get_contraction_label(x).cut_index;
-            for(size_t anc = 0; anc < cx.dist_index()[cx.cut_level()]; anc++)
+            for (size_t anc = 0; anc < cx.dist_index()[cx.cut_level()]; anc++)
                 cx.distances()[anc] = infinity;
         }
 //        for(NodeID x: ch.bottom_up_nodes) {
@@ -1647,11 +1648,11 @@ namespace ttlsa::road_network {
         // update dist_index
         for (NodeID node: nodes) {
             assert(ci[node].dist_index.size() == cut_level);
+            const auto prev_lvl_val = (cut_level == 0 || ci[node].dist_index.size() < cut_level)? 0 : ci[node].dist_index[cut_level - 1];
             if (node_data[node].landmark_level == 0)
-                ci[node].dist_index.push_back(ci[node].dist_index[cut_level - 1] + p.cut.size());
+                ci[node].dist_index.push_back(prev_lvl_val + p.cut.size());
             else
-                ci[node].dist_index.push_back(
-                        ci[node].dist_index[cut_level - 1] + (p.cut.size() - node_data[node].landmark_level + 1));
+                ci[node].dist_index.push_back(prev_lvl_val + (p.cut.size() - node_data[node].landmark_level + 1));
         }
 
         // track truncated labels
@@ -1699,7 +1700,7 @@ namespace ttlsa::road_network {
         assert(is_undirected());
 #ifndef NDEBUG
         // sort neighbors to make algorithms deterministic
-        for (NodeID node : nodes)
+        for (NodeID node: nodes)
             sort(node_data[node].neighbors.begin(), node_data[node].neighbors.end());
 #endif
         // store original neighbor counts
@@ -1912,7 +1913,7 @@ void ContractionHierarchy::write(ostream &os) {
         }
     }
 
-    void Graph::initialize(ContractionHierarchy &ch, std::vector<CutIndex> &ci, vector <Neighbor> &closest) {
+    void Graph::initialize(ContractionHierarchy &ch, std::vector<CutIndex> &ci, vector <Neighbor> &closest) const {
         ch.bottom_up_nodes.reserve(nodes.size() + 1);
         ch.contracted_nodes.reserve(1000);
 
@@ -2213,7 +2214,7 @@ void ContractionHierarchy::write(ostream &os) {
         }
     }
 
-    void Graph::reset(ContractionHierarchy &ch, ContractionIndex &tcl) {
+    void Graph::reset(ContractionHierarchy &ch, ContractionIndex &tcl) const {
 
         // reseting ch
         for (NodeID x: ch.bottom_up_nodes) {
@@ -2231,7 +2232,8 @@ void ContractionHierarchy::write(ostream &os) {
         // reseting tcl
         for (NodeID x: ch.bottom_up_nodes) {
             FlatCutIndex cx = tcl.get_contraction_label(x).cut_index;
-            for (size_t anc = 0; anc < cx.dist_index()[cx.cut_level()]; anc++)
+            assert(cx.label_count() == 0 || cx.label_count() == cx.dist_index()[cx.cut_level()]);
+            for (size_t anc = 0; anc < cx.label_count(); anc++)
                 cx.distances()[anc] = infinity;
         }
 
@@ -2322,7 +2324,8 @@ void ContractionHierarchy::write(ostream &os) {
     }
 
 // appends path from w (exclusive) to v (inclusive)
-    void Graph::unpack_valley_path(const ContractionHierarchy &ch, NodeID v, uint16_t w, std::vector<NodeID> &result) const {
+    void
+    Graph::unpack_valley_path(const ContractionHierarchy &ch, NodeID v, uint16_t w, std::vector<NodeID> &result) const {
         vector<NodeID> stack;
 
         CHNeighbor shortcut(NO_NODE, NO_NODE, infinity);
@@ -2351,7 +2354,8 @@ void ContractionHierarchy::write(ostream &os) {
     }
 
 // appends path from w (exclusive) to v (inclusive)
-    void Graph::unpack_valley_path(const ContractionHierarchy &ch, NodeID v, NodeID w, std::vector<NodeID> &result) const {
+    void
+    Graph::unpack_valley_path(const ContractionHierarchy &ch, NodeID v, NodeID w, std::vector<NodeID> &result) const {
         vector<NodeID> stack;
         stack.push_back(v);
         NodeID current = w;
@@ -2416,7 +2420,8 @@ void ContractionHierarchy::write(ostream &os) {
         }
     }
 
-    vector <NodeID> Graph::query_contraction_hierarchy(const ContractionHierarchy &ch, NodeID v, NodeID w, distance_t& dist) const {
+    vector <NodeID>
+    Graph::query_contraction_hierarchy(const ContractionHierarchy &ch, NodeID v, NodeID w, distance_t &dist) const {
         std::vector<QNode> v_anc, w_anc;
         get_anc_dist(ch, v, v_anc);
         get_anc_dist(ch, w, w_anc);
@@ -2467,7 +2472,8 @@ void ContractionHierarchy::write(ostream &os) {
     }
 
     vector <NodeID>
-    Graph::query_path(const ContractionHierarchy &ch, const ContractionIndex &tcl, NodeID v, NodeID w, distance_t &dist) const {
+    Graph::query_path(const ContractionHierarchy &ch, const ContractionIndex &tcl, NodeID v, NodeID w,
+                      distance_t &dist) const {
         ContractionLabel cv = tcl.get_contraction_label(v), cw = tcl.get_contraction_label(w);
         vector<NodeID> source, target;
         source.reserve(512);

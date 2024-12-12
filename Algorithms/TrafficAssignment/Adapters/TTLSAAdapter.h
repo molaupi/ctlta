@@ -12,7 +12,7 @@
 #include "DataStructures/Labels/SimdLabelSet.h"
 #include "Tools/Simd/AlignedVector.h"
 
-#include "Algorithms/TTLSA/road_network.h"
+#include <ttlsa/road_network.h>
 
 #include "Tools/Constants.h"
 
@@ -119,7 +119,7 @@ namespace trafficassignment {
             verifyUndirectedTopology(inputGraph);
         }
 
-// Invoked before the first iteration.
+        // Invoked before the first iteration.
         void preprocess() {
 
             // Convert the input graph to TTLSA representation.
@@ -152,7 +152,7 @@ namespace trafficassignment {
             // TTLSA can only deal with undirected graphs. Make sure traversal costs are the same in both directions.
             verifyUndirectedWeights(inputGraph);
 
-            ttlsaGraph.resetSpDatastructures(ch, *ci);
+            ttlsaGraph.reset(ch, *ci);
 
             // Customize CCH and HL with new metric on edges:
             std::vector<ttlsa::road_network::Edge> edges;

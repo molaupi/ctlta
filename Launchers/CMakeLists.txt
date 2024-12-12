@@ -1,8 +1,11 @@
-add_executable(AssignTraffic AssignTraffic.cc
-        ../Algorithms/TTLSA/road_network.cpp ../Algorithms/TTLSA/util.cpp)
+add_executable(AssignTraffic AssignTraffic.cc)
 target_compile_definitions(AssignTraffic PRIVATE CSV_IO_NO_THREAD)
+target_compile_options(AssignTraffic PRIVATE ${FULL_WARNINGS})
 # target_include_directories(AssignTraffic PRIVATE ${Boost_INCLUDE_DIR})
 target_link_libraries(AssignTraffic Boost::boost routingkit kassert vectorclass fast_cpp_csv_parser)
+target_link_libraries(AssignTraffic ttlsa) # external TTL standalone implementation
+
+
 if((NUM_THREADS GREATER 1) AND OpenMP_FOUND)
   message("Linking openmp to AssignTraffic target.")
   target_link_libraries(AssignTraffic OpenMP::OpenMP_CXX)
@@ -34,6 +37,9 @@ if (TTL_USE_PERFECT_CUSTOMIZATION)
 else()
   target_compile_definitions(AssignTraffic PRIVATE TTL_USE_PERFECT_CUSTOMIZATION=false)
 endif()
+
+
+
 
 
 add_executable(

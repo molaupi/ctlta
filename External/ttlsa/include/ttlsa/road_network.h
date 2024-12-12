@@ -636,7 +636,7 @@ namespace ttlsa::road_network {
 
         int UpNeighbor_position(const ContractionHierarchy &ch, NodeID v, NodeID w) const;
 
-        void initialize(ContractionHierarchy &ch, std::vector<CutIndex> &ci, std::vector<Neighbor> &closest);
+        void initialize(ContractionHierarchy &ch, std::vector<CutIndex> &ci, std::vector<Neighbor> &closest) const;
 
         void customise_shortcut_graph(ContractionHierarchy &ch, ContractionIndex &tcl, std::vector<Edge> &edges) const;
 
@@ -644,7 +644,7 @@ namespace ttlsa::road_network {
 
         void customise_hub_labelling(ContractionHierarchy &ch, ContractionIndex &tcl) const;
 
-        void reset(ContractionHierarchy &ch, ContractionIndex &tcl);
+        void reset(ContractionHierarchy &ch, ContractionIndex &tcl) const;
 
         // helper functions
         distance_t stableAdd(distance_t d, bool stable);

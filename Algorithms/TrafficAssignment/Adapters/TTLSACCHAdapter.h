@@ -12,7 +12,7 @@
 #include "DataStructures/Labels/SimdLabelSet.h"
 #include "Tools/Simd/AlignedVector.h"
 
-#include "Algorithms/TTLSA/road_network.h"
+#include <ttlsa/road_network.h>
 
 namespace trafficassignment {
 

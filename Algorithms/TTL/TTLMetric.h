@@ -49,7 +49,7 @@ public:
     }
 
     // Returns current weights on edges of upward graph.
-    const int *const upwardWeights() const {
+    int const * upwardWeights() const {
         if constexpr (USE_PERFECT_CUSTOMIZATION)
             return &minimumWeightedCH.upwardGraph().template get<CH::Weight>(0);
         else
@@ -57,7 +57,7 @@ public:
     }
 
     // Returns current weights on edges of downward graph.
-    const int *const downwardWeights() const {
+    int const * downwardWeights() const {
         if constexpr (USE_PERFECT_CUSTOMIZATION)
             return &minimumWeightedCH.downwardGraph().template get<CH::Weight>(0);
         else

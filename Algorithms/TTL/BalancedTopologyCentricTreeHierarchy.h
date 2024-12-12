@@ -186,7 +186,7 @@ private:
                     numVerticesOnBranch.push(0);
                     ++curDepth;
                 },
-                [&](const int child, const int parent) {
+                [&](const int child, const int) {
                     // Backtrack from child to parent when child is done.
                     // Add number of vertices in separator at child to number of vertices
                     auto numVerticesChild = numVerticesOnBranch.top();
@@ -292,11 +292,9 @@ private:
                 }
             } else {
                 // If child is not truncated, set location info for separator vertices at child.
-                uint32_t inSepIdx = 0;
                 for (auto v = sd.lastSeparatorVertex(child) - 1; v >= sd.firstSeparatorVertex(child); --v) {
                     depthOfVertex[v] = lastNonTruncatedDepth;
                     packedSideIds[v] = packedSideId;
-                    ++inSepIdx;
                 }
 
                 ++lastNonTruncatedDepth;
@@ -396,7 +394,7 @@ private:
             }
         };
 
-        const auto backtrack = [&](const int child, const int parent) {
+        const auto backtrack = [&](const int child, const int) {
             // If child was not truncated, it has an entry on sepSizeSumsOnCurBranch. Remove this entry.
             if (!truncateAtSdNode[child]) {
                 sepSizeSumsOnCurBranch.pop_back();
