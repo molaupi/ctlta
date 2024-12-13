@@ -9,7 +9,8 @@
 // use multi-threading for index construction
 #define MULTI_THREAD 32 // determines threshold for multi-threading
 #ifdef MULTI_THREAD
-#define MULTI_THREAD_DISTANCES 4 // number of parallel threads for label & shortcut computation
+// NUM_THREADS is CMake compile time parameter
+#define MULTI_THREAD_DISTANCES NUM_THREADS // number of parallel threads for label & shortcut computation
 #endif
 
 //#include <barrier>
@@ -532,14 +533,6 @@ namespace ttlsa::road_network {
         // reset graph to contain all nodes in global graph
         void reset();
 
-
-        // reset contraction hierarchy
-        void resetSpDatastructures(ContractionHierarchy &ch) const;
-
-        // reset contraction hierarchy and index
-        void resetSpDatastructures(ContractionHierarchy &ch, ContractionIndex &tcl) const;
-
-
         size_t node_count() const;
 
         size_t edge_count() const;
@@ -597,7 +590,8 @@ namespace ttlsa::road_network {
         void path_from_anc(const ContractionHierarchy &ch, NodeID v, NodeID w, std::vector<QNode> &anc_dist,
                            std::vector<NodeID> &result) const;
 
-        std::vector<NodeID> query_contraction_hierarchy(const ContractionHierarchy &ch, NodeID v, NodeID w, distance_t& dist) const;
+        std::vector<NodeID>
+        query_contraction_hierarchy(const ContractionHierarchy &ch, NodeID v, NodeID w, distance_t &dist) const;
 
         void find_shortcut(const ContractionHierarchy &ch, NodeID prev, uint16_t current, CHNeighbor &n) const;
 
@@ -643,6 +637,8 @@ namespace ttlsa::road_network {
         void customise_shortcut_graph(ContractionHierarchy &ch, std::vector<Edge> &edges) const;
 
         void customise_hub_labelling(ContractionHierarchy &ch, ContractionIndex &tcl) const;
+
+        void reset(ContractionHierarchy &ch) const;
 
         void reset(ContractionHierarchy &ch, ContractionIndex &tcl) const;
 

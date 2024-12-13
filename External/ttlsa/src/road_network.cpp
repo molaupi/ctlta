@@ -821,57 +821,6 @@ namespace ttlsa::road_network {
         node_data[t].subgraph_id = NO_SUBGRAPH;
     }
 
-
-    void Graph::resetSpDatastructures(ContractionHierarchy &ch) const {
-
-        // reseting ch
-        for (NodeID x: ch.bottom_up_nodes) {
-            for (CHNeighbor &n: ch.nodes[x].up_neighbors) {
-                n.distance = infinity;
-                n.triangle_node = NO_NODE;
-            }
-        }
-
-//        for(NodeID x: ch.contracted_nodes) {
-//            ch.nodes[x].up_neighbors[0].distance = 0;
-//            ch.nodes[x].up_neighbors[0].triangle_node = NO_NODE;
-//        }
-    }
-
-    void Graph::resetSpDatastructures(ContractionHierarchy &ch, ContractionIndex &tcl) const {
-
-        // reseting ch
-        for (const NodeID &x: ch.bottom_up_nodes) {
-            for (CHNeighbor &n: ch.nodes[x].up_neighbors) {
-                n.distance = infinity;
-                n.triangle_node = NO_NODE;
-            }
-        }
-
-//        for(NodeID x: ch.contracted_nodes) {
-//            ch.nodes[x].up_neighbors[0].distance = 0;
-//            ch.nodes[x].up_neighbors[0].triangle_node = NO_NODE;
-//        }
-//            std::cout << "Rank " << i << ": " << std::none_of(ch.bottom_up_nodes.begin(), ch.bottom_up_nodes.end(), [&](const auto& v) {return v == 4286578687;}) << std::endl;
-
-        // reseting tcl
-        // TODO: Debug
-        for (uint32_t i = 0; i < ch.bottom_up_nodes.size(); ++i) {
-            const NodeID &x = ch.bottom_up_nodes[i];
-            FlatCutIndex cx = tcl.get_contraction_label(x).cut_index;
-            for (size_t anc = 0; anc < cx.dist_index()[cx.cut_level()]; anc++)
-                cx.distances()[anc] = infinity;
-        }
-//        for(NodeID x: ch.bottom_up_nodes) {
-//            FlatCutIndex cx = tcl.get_contraction_label(x).cut_index;
-//            for(size_t anc = 0; anc < cx.dist_index()[cx.cut_level()]; anc++)
-//                cx.distances()[anc] = infinity;
-//        }
-
-//        for(NodeID x: ch.contracted_nodes)
-//            tcl.update_distance_offset(x, infinity);
-    }
-
     void Graph::add_node(NodeID v) {
         assert(v < node_data.size());
         nodes.push_back(v);
@@ -1648,7 +1597,8 @@ namespace ttlsa::road_network {
         // update dist_index
         for (NodeID node: nodes) {
             assert(ci[node].dist_index.size() == cut_level);
-            const auto prev_lvl_val = (cut_level == 0 || ci[node].dist_index.size() < cut_level)? 0 : ci[node].dist_index[cut_level - 1];
+            const auto prev_lvl_val =
+                    (cut_level == 0 || ci[node].dist_index.size() < cut_level) ? 0 : ci[node].dist_index[cut_level - 1];
             if (node_data[node].landmark_level == 0)
                 ci[node].dist_index.push_back(prev_lvl_val + p.cut.size());
             else
@@ -1911,6 +1861,7 @@ void ContractionHierarchy::write(ostream &os) {
         for (int i = 0; i < ch.nodes[v].up_neighbors.size(); i++) {
             if (ch.nodes[v].up_neighbors[i].neighbor == w) return i;
         }
+        return -1;
     }
 
     void Graph::initialize(ContractionHierarchy &ch, std::vector<CutIndex> &ci, vector <Neighbor> &closest) const {
@@ -2211,6 +2162,22 @@ void ContractionHierarchy::write(ostream &os) {
             }
 
             tcl.update_distance_offset(x, root_dist);
+        }
+    }
+
+
+    void Graph::reset(ContractionHierarchy &ch) const {
+        // reseting ch
+        for (NodeID x: ch.bottom_up_nodes) {
+            for (CHNeighbor &n: ch.nodes[x].up_neighbors) {
+                n.distance = infinity;
+                n.triangle_node = NO_NODE;
+            }
+        }
+
+        for (NodeID x: ch.contracted_nodes) {
+            ch.nodes[x].up_neighbors[0].distance = 0;
+            ch.nodes[x].up_neighbors[0].triangle_node = NO_NODE;
         }
     }
 
