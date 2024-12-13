@@ -144,7 +144,7 @@ namespace trafficassignment {
             // TTLSA can only deal with undirected graphs. Make sure traversal costs are the same in both directions.
             verifyUndirectedWeights(inputGraph);
 
-            ttlsaGraph.resetSpDatastructures(ch);
+            ttlsaGraph.reset(ch);
 
             // Customize CCH and HL with new metric on edges:
             std::vector<ttlsa::road_network::Edge> edges;
