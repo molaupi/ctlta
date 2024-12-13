@@ -34,3 +34,8 @@ constexpr int EARTH_RADIUS = 6371000;
 #ifndef TTL_THETA
 #define TTL_THETA 0
 #endif
+
+// The logarithm of the maximum number of elements per vector for vectorization of TTL customization and queries
+#ifndef TTL_SIMD_LOGK
+#define TTL_SIMD_LOGK 0
+#endif

@@ -118,45 +118,53 @@ public:
 
     inline int32_t &upDist(const int32_t &v, const uint32_t &hubIdx) {
         KASSERT(labelOffsets[v] != INVALID_OFFSET);
+        KASSERT(hubIdx < hierarchy.getNumHubs(v));
         return upLabelData[labelOffsets[v] + hubIdx];
     }
 
     const int32_t &upDist(const int32_t &v, const uint32_t &hubIdx) const {
         KASSERT(labelOffsets[v] != INVALID_OFFSET);
+        KASSERT(hubIdx < hierarchy.getNumHubs(v));
         return upLabelData[labelOffsets[v] + hubIdx];
     }
 
     template<bool hasPathEdges = StorePathPointers, std::enable_if_t<hasPathEdges>...>
     inline int32_t &upPathEdge(const int32_t &v, const uint32_t &hubIdx) {
         KASSERT(labelOffsets[v] != INVALID_OFFSET);
+        KASSERT(hubIdx < hierarchy.getNumHubs(v));
         return upLabelData[labelOffsets[v] + hierarchy.getNumHubs(v) + hubIdx];
     }
 
     template<bool hasPathEdges = StorePathPointers, std::enable_if_t<hasPathEdges>...>
     const int32_t &upPathEdge(const int32_t &v, const uint32_t &hubIdx) const {
         KASSERT(labelOffsets[v] != INVALID_OFFSET);
+        KASSERT(hubIdx < hierarchy.getNumHubs(v));
         return upLabelData[labelOffsets[v] + hierarchy.getNumHubs(v) + hubIdx];
     }
 
     inline int32_t &downDist(const int32_t &v, const uint32_t &hubIdx) {
         KASSERT(labelOffsets[v] != INVALID_OFFSET);
+        KASSERT(hubIdx < hierarchy.getNumHubs(v));
         return downLabelData[labelOffsets[v] + hubIdx];
     }
 
     const int32_t &downDist(const int32_t &v, const uint32_t &hubIdx) const {
         KASSERT(labelOffsets[v] != INVALID_OFFSET);
+        KASSERT(hubIdx < hierarchy.getNumHubs(v));
         return downLabelData[labelOffsets[v] + hubIdx];
     }
 
     template<bool hasPathEdges = StorePathPointers, std::enable_if_t<hasPathEdges>...>
     inline int32_t &downPathEdge(const int32_t &v, const uint32_t &hubIdx) {
         KASSERT(labelOffsets[v] != INVALID_OFFSET);
+        KASSERT(hubIdx < hierarchy.getNumHubs(v));
         return downLabelData[labelOffsets[v] + hierarchy.getNumHubs(v) + hubIdx];
     }
 
     template<bool hasPathEdges = StorePathPointers, std::enable_if_t<hasPathEdges>...>
     const int32_t &downPathEdge(const int32_t &v, const uint32_t &hubIdx) const {
         KASSERT(labelOffsets[v] != INVALID_OFFSET);
+        KASSERT(hubIdx < hierarchy.getNumHubs(v));
         return downLabelData[labelOffsets[v] + hierarchy.getNumHubs(v) + hubIdx];
     }
 
@@ -182,7 +190,7 @@ private:
     const BalancedTopologyCentricTreeHierarchy &hierarchy;
 
     std::vector<uint64_t> labelOffsets;
-    std::vector<int32_t> upLabelData; // expects distances, and edge IDs to be int32_t.
-    std::vector<int32_t> downLabelData; // expects distances, and edge IDs to be int32_t.
+    AlignedVector<int32_t> upLabelData; // expects distances, and edge IDs to be int32_t.
+    AlignedVector<int32_t> downLabelData; // expects distances, and edge IDs to be int32_t.
 
 };

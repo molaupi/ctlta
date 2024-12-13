@@ -4,7 +4,7 @@
 #include "Algorithms/TTL/TruncatedTreeLabelling.h"
 #include "Algorithms/Dijkstra/DagShortestPaths.h"
 
-template<typename SearchGraphT, typename LabellingT>
+template<typename SearchGraphT, typename LabellingT, uint32_t logK = TTL_SIMD_LOGK>
 class TTLQuery {
 
 
@@ -257,15 +257,58 @@ private:
         buildDownLabelSearch.run(v);
     }
 
+    static_assert(logK != 1, "logK==1 is not supported for TTLMetric customization. "
+                             "Use logK >= 2 for SIMD or logK = 0 for no SIMD.");
+    static constexpr uint32_t K = 1 << logK;
+
+    // Vectors of multiple data elements for use with SIMD instructions.
+    using BooleanVector = std::conditional_t<logK == 2, Vec4ib, std::conditional_t<logK == 3, Vec8ib, Vec16ib>>;
+    using IntegerVector = std::conditional_t<logK == 2, Vec4i, std::conditional_t<logK == 3, Vec8i, Vec16i>>;
+
     template<typename UpLabel, typename DownLabel>
-    inline void computeMinDistanceInLabels(UpLabel up, DownLabel down, const uint32_t lowestCommonHub) {
-        for (uint32_t i = 0; i < lowestCommonHub; ++i) {
+    inline void computeMinDistanceInLabels(const UpLabel& up, const DownLabel& down, const uint32_t lowestCommonHub) {
+
+
+        int32_t b = 0;
+        if constexpr (logK >= 2) {
+            // Compute minimum values using SIMD instructions for full SIMD vectors:
+            const uint32_t numFullBlocks = lowestCommonHub / K;
+            IntegerVector dUp;
+            IntegerVector dDown;
+            IntegerVector dMin(lastDistance);
+            IntegerVector minBlock;
+            BooleanVector improved;
+            for (; b < numFullBlocks; ++b) {
+                dUp.load(&up.dist(b * K));
+                dDown.load(&down.dist(b * K));
+                dUp += dDown;
+                improved = (dUp < dMin);
+                dMin = select(improved, dUp, dMin);
+                minBlock = select(improved, b, minBlock);
+            }
+            const auto minInBlocks = horizontal_min(dMin);
+            if (minInBlocks < lastDistance) {
+                lastDistance = minInBlocks;
+                const auto idxWithinBlock = horizontal_find_first(dMin == minInBlocks);
+                lastMeetingHubIdx = minBlock[idxWithinBlock] * K + idxWithinBlock;
+            }
+        }
+
+        // For remaining partially filled block do not use SIMD:
+        for (uint32_t i = b * K; i < lowestCommonHub; ++i) {
             const int32_t distForHubI = up.dist(i) + down.dist(i);
             if (distForHubI < lastDistance) {
                 lastDistance = distForHubI;
                 lastMeetingHubIdx = i;
             }
         }
+//        for (uint32_t i = 0; i < lowestCommonHub; ++i) {
+//            const int32_t distForHubI = up.dist(i) + down.dist(i);
+//            if (distForHubI < lastDistance) {
+//                lastDistance = distForHubI;
+//                lastMeetingHubIdx = i;
+//            }
+//        }
     }
 
     const BalancedTopologyCentricTreeHierarchy &hierarchy;
