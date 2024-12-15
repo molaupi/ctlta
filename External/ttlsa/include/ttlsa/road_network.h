@@ -7,10 +7,12 @@
 #define NO_SHORTCUTS // turns off shortcut computation, resulting in smaller indexes but slower local queries
 
 // use multi-threading for index construction
+#if NUM_THREADS > 1
 #define MULTI_THREAD 32 // determines threshold for multi-threading
 #ifdef MULTI_THREAD
 // NUM_THREADS is CMake compile time parameter
 #define MULTI_THREAD_DISTANCES NUM_THREADS // number of parallel threads for label & shortcut computation
+#endif
 #endif
 
 //#include <barrier>
