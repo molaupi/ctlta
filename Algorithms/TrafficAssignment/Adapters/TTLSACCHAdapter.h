@@ -155,7 +155,7 @@ namespace trafficassignment {
                 const auto head = e.b - 1;
                 const auto eInInputGraph = inputGraph.uniqueEdgeBetween(tail, head);
                 KASSERT(eInInputGraph >= 0 && eInInputGraph < inputGraph.numEdges());
-                e.d = inputGraph.traversalCost(eInInputGraph);
+                e.d = inputGraph.template get<WeightT>(eInInputGraph);
 
             }
             ttlsaGraph.customise_shortcut_graph(ch, edges);

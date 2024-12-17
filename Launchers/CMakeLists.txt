@@ -76,6 +76,7 @@ add_executable(RunP2PAlgo RunP2PAlgo.cc)
 target_compile_definitions(RunP2PAlgo PRIVATE CSV_IO_NO_THREAD)
 target_compile_options(RunP2PAlgo PRIVATE ${FULL_WARNINGS})
 target_link_libraries(RunP2PAlgo routingkit kassert vectorclass fast_cpp_csv_parser)
+target_link_libraries(RunP2PAlgo ttlsa) # external TTL standalone implementation
 target_compile_definitions(RunP2PAlgo PRIVATE TTL_THETA=${VAL_TTL_THETA})
 target_compile_definitions(RunP2PAlgo PRIVATE TTL_SIMD_LOGK=${VAL_TTL_SIMD_LOGK})
 target_compile_definitions(RunP2PAlgo PRIVATE TTL_USE_PERFECT_CUSTOMIZATION=${VAL_TTL_USE_PERFECT_CUSTOMIZATION})
