@@ -37,7 +37,7 @@ class EliminationTreeQuery {
     // Returns true if the search can be pruned at v.
     template <typename DistanceLabelContT>
     bool operator()(const int, const DistanceLabel& distToV, const DistanceLabelContT&) const {
-      return !(distToV < *tentativeDistances);
+      return allSet(distToV >= *tentativeDistances);
     }
 
     const DistanceLabel* tentativeDistances; // One tentative distance per simultaneous search.

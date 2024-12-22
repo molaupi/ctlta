@@ -24,7 +24,10 @@ namespace trafficassignment {
     template<typename InputGraphT, typename WeightT>
     class TTLAdapter {
 
-        using LabellingT = TruncatedTreeLabelling<true>;
+        using TTLLabelSet = std::conditional_t<TTL_SIMD_LOGK == 0,
+                BasicLabelSet<0, ParentInfo::FULL_PARENT_INFO>,
+                SimdLabelSet<TTL_SIMD_LOGK, ParentInfo::FULL_PARENT_INFO>>;
+        using LabellingT = TruncatedTreeLabelling<TTLLabelSet>;
         using TTLMetricT = TTLMetric<LabellingT>;
 
     public:
@@ -66,27 +69,17 @@ namespace trafficassignment {
                 // No facilities for centralized searches in TTL. Run each search individually:
                 for (auto j = 0; j < k; ++j) {
                     ttlQuery.run(ranks[sources[j]], ranks[targets[j]]);
-                    distances[j] = static_cast<int>(ttlQuery.getDistance());
+                    distances[j] = ttlQuery.getDistance();
 
-                    // Assign flow to the edges on the computed paths.
-                    const auto &upEdgePath = ttlQuery.getUpEdgePath(); // In reverse order by convention of Dijkstra-based approaches
-                    const auto &downEdgePath = ttlQuery.getDownEdgePath(); // In forward order by convention of Dijkstra-based approaches
-                    KASSERT((upEdgePath.empty() && downEdgePath.empty())
-                            || (upEdgePath.empty() &&
-                                ranks[sources[j]] ==
-                                downGraph.edgeHead(downEdgePath.front()))
-                            || (downEdgePath.empty() &&
-                                upGraph.edgeHead(upEdgePath.front()) ==
-                                ranks[targets[j]])
-                            || (!upEdgePath.empty() && !downEdgePath.empty() &&
-                                upGraph.edgeHead(upEdgePath.front()) ==
-                                downGraph.edgeHead(downEdgePath.front())));
-                    for (const auto e: upEdgePath) {
+                    // Assign flow to the edges (possibly shortcuts) on the computed paths.
+                    const auto &upEdges = ttlQuery.getEdgesOnUpPathUnordered();
+                    const auto &downEdges = ttlQuery.getEdgesOnDownPathUnordered();
+                    for (const auto &e: upEdges) {
                         KASSERT(e >= 0);
                         KASSERT(e < localFlowsOnUpEdges.size());
                         ++localFlowsOnUpEdges[e];
                     }
-                    for (const auto e: downEdgePath) {
+                    for (const auto &e: downEdges) {
                         KASSERT(e >= 0);
                         KASSERT(e < localFlowsOnDownEdges.size());
                         ++localFlowsOnDownEdges[e];

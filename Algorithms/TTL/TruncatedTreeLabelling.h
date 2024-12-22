@@ -1,66 +1,108 @@
 #pragma once
 
 #include "Algorithms/TTL/BalancedTopologyCentricTreeHierarchy.h"
+#include "DataStructures/Labels/BasicLabelSet.h"
+#include "DataStructures/Labels/SimdLabelSet.h"
 
-#ifndef TTL_STORE_PATH_POINTERS
-#define TTL_STORE_PATH_POINTERS true
-#endif
-
-template<bool StorePathPointers = TTL_STORE_PATH_POINTERS>
+template<typename LabelSetT>
 class TruncatedTreeLabelling {
 
     static constexpr uint64_t INVALID_OFFSET = static_cast<uint64_t>(-1);
 
 public:
 
-    static const bool StoresPathPointers = StorePathPointers;
+    using LabelSet = LabelSetT;
+    static constexpr uint32_t K = LabelSet::K;
+    using Batch = typename LabelSet::DistanceLabel; // A batch of K distances or path edges
+    using BatchMask = typename LabelSet::LabelMask; // A mask representing K boolean flags
 
-    struct ConstLabel {
+    static_assert(LabelSet::logK != 1, "logK cannot be 1. Use 0 for no SIMD or >= 2 for SIMD.");
 
-        const int32_t &dist(const uint32_t &hubIdx) const {
+    struct ConstBatchLabel {
+
+        ConstBatchLabel(Batch const *startOfLabel, uint32_t numHubs)
+                : startOfLabel(startOfLabel), numHubs(numHubs), numBatches(numHubs / K + (numHubs % K != 0)) {}
+
+        int32_t dist(const uint32_t &hubIdx) const {
             KASSERT(hubIdx < numHubs);
-            return startOfLabel[hubIdx];
+            return startOfLabel[hubIdx / K][hubIdx % K];
         }
 
-        template<bool hasPathEdges = StorePathPointers, std::enable_if_t<hasPathEdges>...>
-        const int32_t &pathEdge(const uint32_t &hubIdx) const {
-            KASSERT(hubIdx < numHubs);
-            return startOfLabel[numHubs + hubIdx];
+        const Batch &distBatch(const uint32_t &batchIdx) const {
+            KASSERT(batchIdx < numBatches);
+            return startOfLabel[batchIdx];
         }
 
-        int32_t const *startOfLabel;
+        template<bool hasPathEdges = LabelSet::KEEP_PARENT_EDGES, std::enable_if_t<hasPathEdges, bool> = true>
+        int32_t pathEdge(const uint32_t &hubIdx) const {
+            KASSERT(hubIdx < numHubs);
+            return startOfLabel[numBatches + hubIdx / K][hubIdx % K];
+        }
+
+        template<bool hasPathEdges = LabelSet::KEEP_PARENT_EDGES, std::enable_if_t<hasPathEdges, bool> = true>
+        const Batch &pathEdgeBatch(const uint32_t &batchIdx) const {
+            KASSERT(batchIdx < numBatches);
+            return startOfLabel[numBatches + batchIdx];
+        }
+
+        Batch const *startOfLabel;
         uint32_t numHubs;
+        uint32_t numBatches;
     };
 
-    struct Label {
-        const int32_t &dist(const uint32_t &hubIdx) const {
-            KASSERT(hubIdx < numHubs);
-            return startOfLabel[hubIdx];
+    struct BatchLabel {
+
+        BatchLabel(Batch *startOfLabel, uint32_t numHubs)
+                : startOfLabel(startOfLabel), numHubs(numHubs), numBatches(numHubs / K + (numHubs % K != 0)) {}
+
+        // Sets distance at last hub in label to 0 and all unused elements of last batch to INFTY.
+        // Everything else is left untouched.
+        void initializeLastHubDist() {
+            startOfLabel[(numHubs - 1) / K].setUpperElements((numHubs - 1) % K, 0);
+            if (numHubs % K != 0)
+                startOfLabel[(numHubs - 1) / K].setUpperElements((numHubs) % K, INFTY);
         }
 
-        inline int32_t &dist(const uint32_t &hubIdx) {
-            KASSERT(hubIdx < numHubs);
-            return startOfLabel[hubIdx];
+        // Sets path edge at last hub in label to INVALID_EDGE.
+        template<bool hasPathEdges = LabelSet::KEEP_PARENT_EDGES, std::enable_if_t<hasPathEdges, bool> = true>
+        void initializeLastHubPathEdge() {
+            // The call to setUpperElements also sets any unused elements of the last batch to INVALID_EDGE. This
+            // should never have an effect as the unused elements of the last batch should never be used for
+            // any computations.
+            startOfLabel[numBatches + (numHubs - 1) / K].setUpperElements((numHubs - 1) % K, INVALID_EDGE);
+
         }
 
-        template<bool hasPathEdges = StorePathPointers, std::enable_if_t<hasPathEdges>...>
-        const int32_t &pathEdge(const uint32_t &hubIdx) const {
-            KASSERT(hubIdx < numHubs);
-            return startOfLabel[numHubs + hubIdx];
+        const Batch &distBatch(const uint32_t &batchIdx) const {
+            KASSERT(batchIdx < numBatches);
+            return startOfLabel[batchIdx];
         }
 
-        template<bool hasPathEdges = StorePathPointers, std::enable_if_t<hasPathEdges>...>
-        inline int32_t &pathEdge(const uint32_t &hubIdx) {
-            KASSERT(hubIdx < numHubs);
-            return startOfLabel[numHubs + hubIdx];
+        inline Batch &distBatch(const uint32_t &batchIdx) {
+            KASSERT(batchIdx < numBatches);
+            return startOfLabel[batchIdx];
         }
 
-        int32_t *startOfLabel;
+        template<bool hasPathEdges = LabelSet::KEEP_PARENT_EDGES, std::enable_if_t<hasPathEdges, bool> = true>
+        const Batch &pathEdgeBatch(const uint32_t &batchIdx) const {
+            KASSERT(batchIdx < numBatches);
+            return startOfLabel[numBatches + batchIdx];
+        }
+
+        template<bool hasPathEdges = LabelSet::KEEP_PARENT_EDGES, std::enable_if_t<hasPathEdges, bool> = true>
+        inline Batch &pathEdgeBatch(const uint32_t &batchIdx) {
+            KASSERT(batchIdx < numBatches);
+            return startOfLabel[numBatches + batchIdx];
+        }
+
+        Batch *startOfLabel;
         uint32_t numHubs;
+        uint32_t numBatches;
     };
 
+public:
 
-    TruncatedTreeLabelling(const BalancedTopologyCentricTreeHierarchy &hierarchy)
+    explicit TruncatedTreeLabelling(const BalancedTopologyCentricTreeHierarchy &hierarchy)
             : hierarchy(hierarchy), upLabelData(), downLabelData() {}
 
     // Initializes tree labelling with underlying tree hierarchy. (Make sure to preprocess tree hierarchy before calling).
@@ -72,111 +114,71 @@ public:
             if (hierarchy.isVertexTruncated(v))
                 continue;
             labelOffsets[v] = offset;
-            offset += hierarchy.getNumHubs(v); // one distance entry per hub
-            if constexpr (StorePathPointers)
-                offset += hierarchy.getNumHubs(v); // one path edge per hub
+            const auto numHubs = hierarchy.getNumHubs(v);
+            const auto numBatches = numHubs / K + (numHubs % K != 0);
+            offset += numBatches; // one distance entry per hub, K entries per vec
+            if constexpr (LabelSet::KEEP_PARENT_EDGES)
+                offset += numBatches; // one path edge per hub, K edges per vec
         }
-        upLabelData.resize(offset, INFTY);
-        downLabelData.resize(offset, INFTY);
+        upLabelData.resize(offset, Batch(INFTY));
+        downLabelData.resize(offset, Batch(INFTY));
     }
 
     void reset() {
-        std::fill(upLabelData.begin(), upLabelData.end(), INFTY);
-        std::fill(downLabelData.begin(), downLabelData.end(), INFTY);
+        std::fill(upLabelData.begin(), upLabelData.end(), Batch(INFTY));
+        std::fill(downLabelData.begin(), downLabelData.end(), Batch(INFTY));
     }
 
-    ConstLabel upLabel(const int32_t &v) const {
+    ConstBatchLabel upLabel(const int32_t &v) const {
         KASSERT(labelOffsets[v] != INVALID_OFFSET);
-        return ConstLabel(upLabelData.data() + labelOffsets[v], hierarchy.getNumHubs(v));
+        return ConstBatchLabel(upLabelData.data() + labelOffsets[v], hierarchy.getNumHubs(v));
     }
 
-    ConstLabel cUpLabel(const int32_t &v) const {
+    ConstBatchLabel cUpLabel(const int32_t &v) const {
         KASSERT(labelOffsets[v] != INVALID_OFFSET);
-        return ConstLabel(upLabelData.data() + labelOffsets[v], hierarchy.getNumHubs(v));
+        return ConstBatchLabel(upLabelData.data() + labelOffsets[v], hierarchy.getNumHubs(v));
     }
 
-    Label upLabel(const int32_t &v) {
+    BatchLabel upLabel(const int32_t &v) {
         KASSERT(labelOffsets[v] != INVALID_OFFSET);
-        return Label(upLabelData.data() + labelOffsets[v], hierarchy.getNumHubs(v));
+        return BatchLabel(upLabelData.data() + labelOffsets[v], hierarchy.getNumHubs(v));
     }
 
-    ConstLabel downLabel(const int32_t &v) const {
+    ConstBatchLabel downLabel(const int32_t &v) const {
         KASSERT(labelOffsets[v] != INVALID_OFFSET);
-        return ConstLabel(downLabelData.data() + labelOffsets[v], hierarchy.getNumHubs(v));
+        return ConstBatchLabel(downLabelData.data() + labelOffsets[v], hierarchy.getNumHubs(v));
     }
 
-    ConstLabel cDownLabel(const int32_t &v) const {
+    ConstBatchLabel cDownLabel(const int32_t &v) const {
         KASSERT(labelOffsets[v] != INVALID_OFFSET);
-        return ConstLabel(downLabelData.data() + labelOffsets[v], hierarchy.getNumHubs(v));
+        return ConstBatchLabel(downLabelData.data() + labelOffsets[v], hierarchy.getNumHubs(v));
     }
 
-    Label downLabel(const int32_t &v) {
+    BatchLabel downLabel(const int32_t &v) {
         KASSERT(labelOffsets[v] != INVALID_OFFSET);
-        return Label(downLabelData.data() + labelOffsets[v], hierarchy.getNumHubs(v));
+        return BatchLabel(downLabelData.data() + labelOffsets[v], hierarchy.getNumHubs(v));
     }
 
-
-    inline int32_t &upDist(const int32_t &v, const uint32_t &hubIdx) {
-        KASSERT(labelOffsets[v] != INVALID_OFFSET);
-        KASSERT(hubIdx < hierarchy.getNumHubs(v));
-        return upLabelData[labelOffsets[v] + hubIdx];
-    }
-
-    const int32_t &upDist(const int32_t &v, const uint32_t &hubIdx) const {
+    // Convenience method to directly access an up path edge of a vertex without explicitly getting the vertex's label.
+    template<bool hasPathEdges = LabelSet::KEEP_PARENT_EDGES,
+            std::enable_if_t<hasPathEdges, bool> = true>
+    int32_t upPathEdge(const int32_t &v, const uint32_t &hubIdx) const {
         KASSERT(labelOffsets[v] != INVALID_OFFSET);
         KASSERT(hubIdx < hierarchy.getNumHubs(v));
-        return upLabelData[labelOffsets[v] + hubIdx];
+        const auto &numHubs = hierarchy.getNumHubs(v);
+        const auto numBatches = numHubs / K + (numHubs % K != 0);
+        return upLabelData[labelOffsets[v] + numBatches + hubIdx / K][hubIdx % K];
     }
 
-    template<bool hasPathEdges = StorePathPointers, std::enable_if_t<hasPathEdges>...>
-    inline int32_t &upPathEdge(const int32_t &v, const uint32_t &hubIdx) {
+    // Convenience method to directly access a down path edge of a vertex without explicitly getting the vertex's label.
+    template<bool hasPathEdges = LabelSet::KEEP_PARENT_EDGES,
+            std::enable_if_t<hasPathEdges, bool> = true>
+    int32_t downPathEdge(const int32_t &v, const uint32_t &hubIdx) const {
         KASSERT(labelOffsets[v] != INVALID_OFFSET);
         KASSERT(hubIdx < hierarchy.getNumHubs(v));
-        return upLabelData[labelOffsets[v] + hierarchy.getNumHubs(v) + hubIdx];
-    }
-
-    template<bool hasPathEdges = StorePathPointers, std::enable_if_t<hasPathEdges>...>
-    const int32_t &upPathEdge(const int32_t &v, const uint32_t &hubIdx) const {
-        KASSERT(labelOffsets[v] != INVALID_OFFSET);
-        KASSERT(hubIdx < hierarchy.getNumHubs(v));
-        return upLabelData[labelOffsets[v] + hierarchy.getNumHubs(v) + hubIdx];
-    }
-
-    inline int32_t &downDist(const int32_t &v, const uint32_t &hubIdx) {
-        KASSERT(labelOffsets[v] != INVALID_OFFSET);
-        KASSERT(hubIdx < hierarchy.getNumHubs(v));
-        return downLabelData[labelOffsets[v] + hubIdx];
-    }
-
-    const int32_t &downDist(const int32_t &v, const uint32_t &hubIdx) const {
-        KASSERT(labelOffsets[v] != INVALID_OFFSET);
-        KASSERT(hubIdx < hierarchy.getNumHubs(v));
-        return downLabelData[labelOffsets[v] + hubIdx];
-    }
-
-    template<bool hasPathEdges = StorePathPointers, std::enable_if_t<hasPathEdges>...>
-    inline int32_t &downPathEdge(const int32_t &v, const uint32_t &hubIdx) {
-        KASSERT(labelOffsets[v] != INVALID_OFFSET);
-        KASSERT(hubIdx < hierarchy.getNumHubs(v));
-        return downLabelData[labelOffsets[v] + hierarchy.getNumHubs(v) + hubIdx];
-    }
-
-    template<bool hasPathEdges = StorePathPointers, std::enable_if_t<hasPathEdges>...>
-    const int32_t &downPathEdge(const int32_t &v, const uint32_t &hubIdx) const {
-        KASSERT(labelOffsets[v] != INVALID_OFFSET);
-        KASSERT(hubIdx < hierarchy.getNumHubs(v));
-        return downLabelData[labelOffsets[v] + hierarchy.getNumHubs(v) + hubIdx];
-    }
-
-    void assertFullyCustomized() const {
-        for (int32_t v = 0; v < labelOffsets.size(); ++v) {
-            if (hierarchy.isVertexTruncated(v))
-                continue;
-            for (auto i = 0; i < hierarchy.getNumHubs(v); ++i) {
-                KASSERT(!(upDist(v, i) == INFTY || upPathEdge(v, i) == INFTY || downDist(v, i) == INFTY ||
-                          downPathEdge(v, i) == INFTY));
-            }
-        }
+        const auto &numHubs = hierarchy.getNumHubs(v);
+        const auto numBatches = numHubs / K + (numHubs % K != 0);
+        return downLabelData[labelOffsets[v] + numBatches + hubIdx / K][hubIdx % K];
     }
 
     uint64_t sizeInBytes() const {
@@ -190,7 +192,7 @@ private:
     const BalancedTopologyCentricTreeHierarchy &hierarchy;
 
     std::vector<uint64_t> labelOffsets;
-    AlignedVector<int32_t> upLabelData; // expects distances, and edge IDs to be int32_t.
-    AlignedVector<int32_t> downLabelData; // expects distances, and edge IDs to be int32_t.
+    AlignedVector<Batch> upLabelData; // expects distances, and edge IDs to be int32_t.
+    AlignedVector<Batch> downLabelData; // expects distances, and edge IDs to be int32_t.
 
 };

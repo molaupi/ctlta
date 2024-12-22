@@ -278,11 +278,12 @@ inline void runQueries(const CommandLineParser& clp) {
       BalancedTopologyCentricTreeHierarchy treeHierarchy;
       treeHierarchy.preprocess(graph, sepDecomp);
 
-      using LabellingT = TruncatedTreeLabelling<>;
+      using TTLLabelSet = std::conditional_t<TTL_SIMD_LOGK == 0,
+              BasicLabelSet<0, ParentInfo::NO_PARENT_INFO>,
+              SimdLabelSet<TTL_SIMD_LOGK, ParentInfo::NO_PARENT_INFO>>;
+      using LabellingT = TruncatedTreeLabelling<TTLLabelSet>;
       LabellingT ttl(treeHierarchy);
       ttl.init();
-
-
 
       TTLMetric<LabellingT> metric(treeHierarchy, cch, useLengths? &graph.length(0) : &graph.travelTime(0));
       metric.buildCustomizedTTL(ttl);
@@ -500,7 +501,10 @@ inline void runPreprocessing(const CommandLineParser& clp) {
 
       BalancedTopologyCentricTreeHierarchy treeHierarchy;
       treeHierarchy.preprocess(graph, decomp);
-      using LabellingT = TruncatedTreeLabelling<>;
+      using TTLLabelSet = std::conditional_t<TTL_SIMD_LOGK == 0,
+      BasicLabelSet<0, ParentInfo::NO_PARENT_INFO>,
+              SimdLabelSet<TTL_SIMD_LOGK, ParentInfo::NO_PARENT_INFO>>;
+      using LabellingT = TruncatedTreeLabelling<TTLLabelSet>;
       LabellingT ttl(treeHierarchy);
         ttl.init();
 

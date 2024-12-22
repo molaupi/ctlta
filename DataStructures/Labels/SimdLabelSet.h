@@ -1,3 +1,29 @@
+/// ******************************************************************************
+/// MIT License
+///
+/// Copyright (c) 2020 Valentin Buchhold
+/// Copyright (c) 2023 Moritz Laupichler <moritz.laupichler@kit.edu>
+///
+/// Permission is hereby granted, free of charge, to any person obtaining a copy
+/// of this software and associated documentation files (the "Software"), to deal
+/// in the Software without restriction, including without limitation the rights
+/// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+/// copies of the Software, and to permit persons to whom the Software is
+/// furnished to do so, subject to the following conditions:
+///
+/// The above copyright notice and this permission notice shall be included in all
+/// copies or substantial portions of the Software.
+///
+/// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+/// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+/// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+/// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+/// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+/// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+/// SOFTWARE.
+/// ******************************************************************************
+
+
 #pragma once
 
 #include <array>
@@ -12,199 +38,389 @@
 // A set of consistent distance and parent labels for Dijkstra's algorithm. The template arguments
 // specify the number of shortest paths computed simultaneously and the kind of parent information
 // that should be collected.
-template <int logSearches, ParentInfo parentInfo>
+template<int logSearches, ParentInfo parentInfo>
 struct SimdLabelSet {
-  static_assert(logSearches >= 2, "The SIMD label set requires at least 4 simultaneous searches.");
+    static_assert(logSearches >= 2, "The SIMD label set requires at least 4 simultaneous searches.");
 
- public:
-  // The number of simultaneous shortest-path computations.
-  static constexpr int logK = logSearches;
-  static constexpr int K = 1 << logK;
+public:
+    // The number of simultaneous shortest-path computations.
+    static constexpr int logK = logSearches;
+    static constexpr int K = 1 << logK;
 
-  // Vectors of multiple data elements for use with SIMD instructions.
-  using BooleanVector = std::conditional_t<logK == 2, Vec4ib, Vec8ib>;
-  using IntegerVector = std::conditional_t<logK == 2, Vec4i, Vec8i>;
+    // Vectors of multiple data elements for use with SIMD instructions.
+    using BooleanVector = std::conditional_t<logK == 2, Vec4ib, Vec8ib>;
+    using IntegerVector = std::conditional_t<logK == 2, Vec4i, Vec8i>;
 
-  // Flags indicating whether parent vertices and/or parent edges should be collected.
-  static constexpr bool KEEP_PARENT_VERTICES = parentInfo != ParentInfo::NO_PARENT_INFO;
-  static constexpr bool KEEP_PARENT_EDGES    = parentInfo == ParentInfo::FULL_PARENT_INFO;
+    // Flags indicating whether parent vertices and/or parent edges should be collected.
+    static constexpr bool KEEP_PARENT_VERTICES = parentInfo != ParentInfo::NO_PARENT_INFO;
+    static constexpr bool KEEP_PARENT_EDGES = parentInfo == ParentInfo::FULL_PARENT_INFO;
 
- private:
-  static constexpr int VECTOR_SIZE = logK == 2 ? 4 : 8; // The number of data elements per vector.
-  static constexpr int NUM_VECTORS = K / VECTOR_SIZE; // The number of vectors per label.
+private:
+    static constexpr int VECTOR_SIZE = logK == 2 ? 4 : 8; // The number of data elements per vector.
+    static constexpr int NUM_VECTORS = K / VECTOR_SIZE; // The number of vectors per label.
 
-  // Arrays of vectors that store all k values of a packed label.
-  using BooleanLabel = std::array<BooleanVector, NUM_VECTORS>;
-  using IntegerLabel = std::array<IntegerVector, NUM_VECTORS>;
+    // Arrays of vectors that store all k values of a packed label.
+    using BooleanLabel = std::array<BooleanVector, NUM_VECTORS>;
+    using IntegerLabel = std::array<IntegerVector, NUM_VECTORS>;
 
- public:
-  // A mask that marks a subset of components in a packed distance label. For example, the result
-  // of a less-than comparison between two multiple-source distance labels a and b is a mask that
-  // indicates for which components i it holds that a[i] < b[i].
-  class LabelMask {
-   public:
-    // Constructs an uninitialized mask.
-    LabelMask() = default;
+public:
+    // A mask that marks a subset of components in a packed distance label. For example, the result
+    // of a less-than comparison between two multiple-source distance labels a and b is a mask that
+    // indicates for which components i it holds that a[i] < b[i].
+    class LabelMask {
+    public:
+        // Constructs an uninitialized mask.
+        LabelMask() = default;
 
-    // Constructs a mask with all k components set to val. Converting constructor.
-    LabelMask(const bool val) {
-      for (int i = 0; i < NUM_VECTORS; ++i)
-        isMarked[i] = val;
-    }
+        // Constructs a mask with all k components set to val. Converting constructor.
+        LabelMask(const bool val) {
+            for (int i = 0; i < NUM_VECTORS; ++i)
+                isMarked[i] = val;
+        }
 
-    // Takes the logical AND of this and the specified mask.
-    LabelMask& operator&=(const LabelMask& rhs) {
-      for (int i = 0; i < NUM_VECTORS; ++i)
-        isMarked[i] &= rhs.isMarked[i];
-      return *this;
-    }
+        // Takes the logical AND of this and the specified mask.
+        LabelMask &operator&=(const LabelMask &rhs) {
+            for (int i = 0; i < NUM_VECTORS; ++i)
+                isMarked[i] &= rhs.isMarked[i];
+            return *this;
+        }
 
-    // Returns a const reference to the i-th block of flags in this mask.
-    const BooleanVector& operator[](const int i) const {
-      assert(i >= 0); assert(i < NUM_VECTORS);
-      return isMarked[i];
-    }
+        friend LabelMask operator&(const LabelMask &mask1, const LabelMask &mask2) {
+            LabelMask res;
+            for (int i = 0; i < NUM_VECTORS; ++i)
+                res.isMarked[i] = mask1.isMarked[i] & mask2.isMarked[i];
+            return res;
+        }
 
-    // Returns a reference to the i-th block of flags in this mask.
-    BooleanVector& operator[](const int i) {
-      assert(i >= 0); assert(i < NUM_VECTORS);
-      return isMarked[i];
-    }
+        // Takes the logical AND of this and the specified mask.
+        LabelMask &operator|=(const LabelMask &rhs) {
+            for (int i = 0; i < NUM_VECTORS; ++i)
+                isMarked[i] |= rhs.isMarked[i];
+            return *this;
+        }
 
-    // Returns true if this mask marks at least one component.
-    operator bool() const {
-      BooleanVector tmp = isMarked[0];
-      for (int i = 1; i < NUM_VECTORS; ++i)
-        tmp |= isMarked[i];
-      return horizontal_or(tmp);
-    }
+        friend LabelMask operator|(const LabelMask &mask1, const LabelMask& mask2) {
+            LabelMask res;
+            for (int i = 0; i < NUM_VECTORS; ++i) {
+                res.isMarked[i] = mask1.isMarked[i] | mask2.isMarked[i];
+            }
+            return res;
+        }
 
-    BooleanLabel isMarked; // Flags indicating for each component if it is marked.
-  };
+        // Returns the logical NOT of a mask.
+        friend LabelMask operator~(const LabelMask &mask) {
+            LabelMask res;
+            for (int i = 0; i < NUM_VECTORS; ++i)
+                res.isMarked[i] = ~mask.isMarked[i];
+            return res;
+        }
 
-  // A packed distance label for a vertex, storing k distance values. Each value maintains the
-  // tentative distance from a different simultaneous source.
-  class DistanceLabel {
-   public:
-    // A class simulating the behavior of references to a single distance value in a packed label.
-    class Reference {
-      // Only DistanceLabel is allowed to construct references to a single distance value.
-      friend class DistanceLabel;
+        // Returns the i-th value in this mask.
+        bool operator[](const int i) const {
+            assert(i >= 0);
+            assert(i < K);
+            return isMarked[i / VECTOR_SIZE][i % VECTOR_SIZE];
+        }
 
-     public:
-      // Sets the distance value to val.
-      Reference& operator=(const int val) {
-        block.insert(localIndex, val);
-        return *this;
-      }
+        // Returns the i-th value in this mask.
+        bool operator[](const int i) {
+            assert(i >= 0);
+            assert(i < K);
+            return isMarked[i / VECTOR_SIZE][i % VECTOR_SIZE];
+        }
 
-      // Returns the distance value.
-      operator int() const {
-        return block.extract(localIndex);
-      }
+//        // Returns true if this mask marks at least one component.
+//        operator bool() const {
+//            BooleanVector tmp = isMarked[0];
+//            for (int i = 1; i < NUM_VECTORS; ++i)
+//                tmp |= isMarked[i];
+//            return horizontal_or(tmp);
+//        }
 
-     private:
-      // Constructs a reference to the i-th distance value in the specified block.
-      Reference(IntegerVector& block, const int i) : block(block), localIndex(i) {}
+        friend bool anySet(const LabelMask &mask) {
+            BooleanVector tmp = mask.isMarked[0];
+            for (int i = 1; i < NUM_VECTORS; ++i)
+                tmp |= mask.isMarked[i];
+            return horizontal_or(tmp);
+        }
 
-      IntegerVector& block; // The block containing the distance value.
-      const int localIndex; // The index of the distance value in the block above.
+        friend bool allSet(const LabelMask &mask) {
+            return !anySet(~mask);
+        }
+
+        friend int countSet(const LabelMask &mask) {
+            int numSet = 0;
+            for (int i = 0; i < NUM_VECTORS; ++i)
+                numSet += horizontal_count(mask.isMarked[i]);
+            return numSet;
+        }
+
+        // Returns index of first set flag in mask or -1 if none are set.
+        friend int firstSet(const LabelMask & mask) {
+            if constexpr (NUM_VECTORS == 1) {
+                return horizontal_find_first(mask.isMarked[0]);
+            } else {
+                int i = 0;
+                while (i < NUM_VECTORS && !horizontal_or(mask.isMarked[i]))
+                    ++i;
+                if (i == NUM_VECTORS)
+                    return -1;
+                return i * VECTOR_SIZE + horizontal_find_first(mask.isMarked[i]);
+            }
+        }
+
+        BooleanLabel isMarked; // Flags indicating for each component if it is marked.
     };
 
-    // Constructs an uninitialized distance label.
-    DistanceLabel() = default;
+    // A packed distance label for a vertex, storing k distance values. Each value maintains the
+    // tentative distance from a different simultaneous source.
+    class DistanceLabel {
+    public:
 
-    // Constructs a distance label with all k values set to val. Converting constructor.
-    DistanceLabel(const int val) {
-      for (int i = 0; i < NUM_VECTORS; ++i)
-        values[i] = val;
-    }
+        static constexpr int K = SimdLabelSet::K;
 
-    // Returns a reference to the i-th distance value in this label.
-    Reference operator[](const int i) {
-      assert(i >= 0); assert(i < K);
-      return Reference(values[i / VECTOR_SIZE], i % VECTOR_SIZE);
-    }
+        // A class simulating the behavior of references to a single distance value in a packed label.
+        class Reference {
+            // Only DistanceLabel is allowed to construct references to a single distance value.
+            friend class DistanceLabel;
 
-    // Returns the packed sum of lhs and rhs.
-    friend DistanceLabel operator+(const DistanceLabel& lhs, const DistanceLabel& rhs) {
-      DistanceLabel sum;
-      for (int i = 0; i < NUM_VECTORS; ++i)
-        sum.values[i] = lhs.values[i] + rhs.values[i];
-      return sum;
-    }
+        public:
+            // Sets the distance value to val.
+            Reference &operator=(const int val) {
+                block.insert(localIndex, val);
+                return *this;
+            }
 
-    // Returns a mask that indicates for which components i it holds that lhs[i] < rhs[i].
-    friend LabelMask operator<(const DistanceLabel& lhs, const DistanceLabel& rhs) {
-      LabelMask mask;
-      for (int i = 0; i < NUM_VECTORS; ++i)
-        mask[i] = lhs.values[i] < rhs.values[i];
-      return mask;
-    }
+            // Returns the distance value.
+            operator int() const {
+                return block.extract(localIndex);
+            }
 
-    // Returns the priority of this label.
-    int getKey() const {
-      IntegerVector packedMin = values[0];
-      for (int i = 1; i < NUM_VECTORS; ++i)
-        packedMin = ::min(packedMin, values[i]);
-      return horizontal_min(packedMin);
-    }
+        private:
+            // Constructs a reference to the i-th distance value in the specified block.
+            Reference(IntegerVector &block, const int i) : block(block), localIndex(i) {}
 
-    // Returns the horizontal maximum amongst the packed distance values in this label.
-    int horizontalMax() const {
-      IntegerVector packedMax = values[0];
-      for (int i = 1; i < NUM_VECTORS; ++i)
-        packedMax = ::max(packedMax, values[i]);
-      return horizontal_max(packedMax);
-    }
+            IntegerVector &block; // The block containing the distance value.
+            const int localIndex; // The index of the distance value in the block above.
+        };
 
-    // Take the packed minimum of this and the specified label.
-    void min(const DistanceLabel& other) {
-      for (int i = 0; i < NUM_VECTORS; ++i)
-        values[i] = ::min(values[i], other.values[i]);
-    }
+        // Constructs an uninitialized distance label.
+        DistanceLabel() = default;
 
-   private:
-    IntegerLabel values; // The k distance values, one for each simultaneous source.
-  };
+        // Constructs a distance label with all k values set to val. Converting constructor.
+        DistanceLabel(const int val) {
+            for (int i = 0; i < NUM_VECTORS; ++i)
+                values[i] = val;
+        }
 
- private:
-  // A packed label for a vertex, storing k parent edges.
-  class ParentEdge {
-   public:
-    // Returns the parent edge on the shortest path from the i-th source.
-    int edge(const int i) const {
-      assert(i >= 0); assert(i < K);
-      return edges[i / VECTOR_SIZE].extract(i % VECTOR_SIZE);
-    }
+        // Returns a reference to the i-th distance value in this label.
+        Reference operator[](const int i) {
+            assert(i >= 0);
+            assert(i < K);
+            return Reference(values[i / VECTOR_SIZE], i % VECTOR_SIZE);
+        }
 
-    // Sets the parent edge to e on all shortest paths specified by mask.
-    void setEdge(const int e, const LabelMask& mask) {
-      for (int i = 0; i < NUM_VECTORS; ++i)
-        edges[i] = select(mask[i], e, edges[i]);
-    }
+        // Returns the i-th distance value in this label.
+        int operator[](const int i) const {
+            assert(i >= 0);
+            assert(i < K);
+            return values[i / VECTOR_SIZE].extract(i % VECTOR_SIZE);
+        }
 
-   private:
-    IntegerLabel edges; // The k parent edges, one for each simultaneous source.
-  };
+        // Returns the packed sum of lhs and rhs.
+        friend DistanceLabel operator+(const DistanceLabel &lhs, const DistanceLabel &rhs) {
+            DistanceLabel sum;
+            for (int i = 0; i < NUM_VECTORS; ++i)
+                sum.values[i] = lhs.values[i] + rhs.values[i];
+            return sum;
+        }
 
- public:
-  // A packed label for a vertex, storing k parent vertices and possibly k parent edges.
-  class ParentLabel : public std::conditional_t<KEEP_PARENT_EDGES, ParentEdge, EmptyClass> {
-   public:
-    // Returns the parent vertex on the shortest path from the i-th source.
-    int vertex(const int i) const {
-      assert(i >= 0); assert(i < K);
-      return vertices[i / VECTOR_SIZE].extract(i % VECTOR_SIZE);
-    }
+        // Packed add of rhs to this.
+        DistanceLabel &operator+=(const DistanceLabel &rhs) {
+            *this = *this + rhs;
+            return *this;
+        }
 
-    // Sets the parent vertex to u on all shortest paths specified by mask.
-    void setVertex(const int u, const LabelMask& mask) {
-      for (int i = 0; i < NUM_VECTORS; ++i)
-        vertices[i] = select(mask[i], u, vertices[i]);
-    }
+        // Packed minus.
+        friend DistanceLabel operator-(const DistanceLabel &lhs, const DistanceLabel &rhs) {
+            DistanceLabel diff;
+            for (int i = 0; i < NUM_VECTORS; ++i)
+                diff.values[i] = lhs.values[i] - rhs.values[i];
+            return diff;
+        }
 
-   private:
-    IntegerLabel vertices; // The k parent vertices, one for each simultaneous source.
-  };
+        // Packed subtract of rhs to this.
+        DistanceLabel &operator-=(const DistanceLabel &rhs) {
+            *this = *this - rhs;
+            return *this;
+        }
+
+        // Returns a mask that indicates for which components i it holds that lhs[i] < rhs[i].
+        friend LabelMask operator<(const DistanceLabel &lhs, const DistanceLabel &rhs) {
+            LabelMask mask;
+            for (int i = 0; i < NUM_VECTORS; ++i)
+                mask.isMarked[i] = lhs.values[i] < rhs.values[i];
+            return mask;
+        }
+
+        // Returns a mask that indicates for which components i it holds that lhs[i] <= rhs[i].
+        friend LabelMask operator<=(const DistanceLabel &lhs, const DistanceLabel &rhs) {
+            return ~(rhs < lhs);
+        }
+
+        // Returns a mask that indicates for which components i it holds that lhs[i] > rhs[i].
+        friend LabelMask operator>(const DistanceLabel &lhs, const DistanceLabel &rhs) {
+            return rhs < lhs;
+        }
+
+        // Returns a mask that indicates for which components i it holds that lhs[i] >= rhs[i].
+        friend LabelMask operator>=(const DistanceLabel &lhs, const DistanceLabel &rhs) {
+            return rhs <= lhs;
+        }
+
+        // Returns a mask that indicates for which components i it holds that lhs[i] == rhs[i].
+        friend LabelMask operator==(const DistanceLabel &lhs, const DistanceLabel &rhs) {
+            LabelMask mask;
+            for (int i = 0; i < NUM_VECTORS; ++i)
+                mask.isMarked[i] = lhs.values[i] == rhs.values[i];
+            return mask;
+        }
+
+        // Returns a mask that indicates for which components i it holds that lhs[i] != rhs[i].
+        friend LabelMask operator!=(const DistanceLabel &lhs, const DistanceLabel &rhs) {
+            return ~(lhs == rhs);
+        }
+
+        // Returns the priority of this label.
+        int getKey() const {
+            IntegerVector packedMin = values[0];
+            for (int i = 1; i < NUM_VECTORS; ++i)
+                packedMin = ::min(packedMin, values[i]);
+            return horizontal_min(packedMin);
+        }
+
+        // Returns the horizontal minimum amongst the packed distance values in this label.
+        int horizontalMin() const {
+            IntegerVector packedMin = values[0];
+            for (int i = 1; i < NUM_VECTORS; ++i)
+                packedMin = ::min(packedMin, values[i]);
+            return horizontal_min(packedMin);
+        }
+
+        // Returns the horizontal maximum amongst the packed distance values in this label.
+        int horizontalMax() const {
+            IntegerVector packedMax = values[0];
+            for (int i = 1; i < NUM_VECTORS; ++i)
+                packedMax = ::max(packedMax, values[i]);
+            return horizontal_max(packedMax);
+        }
+
+        // Take the packed minimum of this and the specified label.
+        void min(const DistanceLabel &other) {
+            for (int i = 0; i < NUM_VECTORS; ++i)
+                values[i] = ::min(values[i], other.values[i]);
+        }
+
+        // Take the packed maximum of this and the specified label.
+        void max(const DistanceLabel &other) {
+            for (int i = 0; i < NUM_VECTORS; ++i)
+                values[i] = ::max(values[i], other.values[i]);
+        }
+
+        // Multiply all entries in this label with a scalar factor
+        void multiplyWithScalar(const int s) {
+            for (int i = 0; i < NUM_VECTORS; ++i)
+                values[i] = s * values[i];
+        }
+
+        // Sets this label at all slots i where mask[i] = true.
+        void setIf(const DistanceLabel &other, const LabelMask &mask) {
+            for (int i = 0; i < NUM_VECTORS; ++i)
+                values[i] = select(mask.isMarked[i], other.values[i], values[i]);
+        }
+
+        // Sets values at indices fromIdx and above to val, leaving indices 0 to fromIdx - 1 untouched.
+        void setUpperElements(const int fromIdx, const int val) {
+            const int numUntouchedVecs = fromIdx / VECTOR_SIZE;
+            if (numUntouchedVecs >= NUM_VECTORS)
+                return;
+
+            // Set partially affected vector: Subtract val from all elements, then set affected indices to 0 using
+            // cutoff method, and finally add val again.
+            values[numUntouchedVecs] -= val;
+            values[numUntouchedVecs].cutoff(fromIdx % VECTOR_SIZE);
+            values[numUntouchedVecs] += val;
+
+            // Set all vectors that are affected in full
+            for (int i = numUntouchedVecs + 1; i < NUM_VECTORS; ++i)
+                values[i] = val;
+        }
+
+        // Select between two operands. Corresponds to this pseudocode:
+        // for (int i = 0; i < K; i++) result[i] = mask[i] ? l1[i] : l2[i];
+        friend DistanceLabel select(const LabelMask &mask, const DistanceLabel &l1, const DistanceLabel &l2) {
+            DistanceLabel result;
+            for (int i = 0; i < NUM_VECTORS; ++i)
+                result.values[i] = select(mask.isMarked[i], l1.values[i], l2.values[i]);
+            return result;
+        }
+
+    private:
+        IntegerLabel values; // The k distance values, one for each simultaneous source.
+    };
+
+private:
+    // A packed label for a vertex, storing k parent edges.
+    class ParentEdge {
+
+    public:
+        // Returns the parent edge on the shortest path from the i-th source.
+        int edge(const int i) const {
+            assert(i >= 0);
+            assert(i < K);
+            return edges[i / VECTOR_SIZE].extract(i % VECTOR_SIZE);
+        }
+
+        // Sets the parent edge to e on all shortest paths specified by mask.
+        void setEdge(const int e, const LabelMask &mask) {
+            for (int i = 0; i < NUM_VECTORS; ++i)
+                edges[i] = select(mask.isMarked[i], e, edges[i]);
+        }
+
+    private:
+        IntegerLabel edges; // The k parent edges, one for each simultaneous source.
+    };
+
+public:
+    // A packed label for a vertex, storing k parent vertices and possibly k parent edges.
+    class ParentLabel : public std::conditional_t<KEEP_PARENT_EDGES, ParentEdge, EmptyClass> {
+    public:
+
+        ParentLabel() = default;
+
+        ParentLabel(const int val) {
+            for (int i = 0; i < NUM_VECTORS; ++i)
+                vertices[i] = val;
+
+            if (ParentEdge * e = dynamic_cast<ParentEdge *>(this)) {
+                e->setEdge(val, true);
+            }
+        }
+
+        // Returns the parent vertex on the shortest path from the i-th source.
+        int vertex(const int i) const {
+            assert(i >= 0);
+            assert(i < K);
+            return vertices[i / VECTOR_SIZE].extract(i % VECTOR_SIZE);
+        }
+
+        // Sets the parent vertex to u on all shortest paths specified by mask.
+        void setVertex(const int u, const LabelMask &mask) {
+            for (int i = 0; i < NUM_VECTORS; ++i)
+                vertices[i] = select(mask.isMarked[i], u, vertices[i]);
+        }
+
+    private:
+        IntegerLabel vertices; // The k parent vertices, one for each simultaneous source.
+    };
 };

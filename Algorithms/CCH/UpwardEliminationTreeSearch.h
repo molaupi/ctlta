@@ -195,7 +195,7 @@ private:
                 auto &distToW = distanceLabels[w];
                 const auto distViaV = distToV + edgeWeights[e];
                 const auto mask = distViaV < distToW;
-                if (mask) {
+                if (anySet(mask)) {
                     distToW.min(distViaV);
                     parent.setVertex(w, v, mask);
                     parent.setEdge(w, e, mask);

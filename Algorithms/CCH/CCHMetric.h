@@ -21,7 +21,7 @@
 // stores the edge weights and contains several sequential and parallel customization algorithms.
 class CCHMetric {
 
-    template<typename, uint32_t, bool>
+    template<typename, bool>
     friend class TTLMetric;
 
  public:
