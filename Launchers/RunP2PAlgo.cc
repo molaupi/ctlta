@@ -33,6 +33,7 @@
 #include "Tools/StringHelpers.h"
 #include "Tools/Timer.h"
 #include "External/ttlsa/include/ttlsa/road_network.h"
+#include "Tools/CommandLine/ProgressBar.h"
 
 inline void printUsage() {
   std::cout <<
@@ -602,6 +603,91 @@ inline void runPreprocessing(const CommandLineParser& clp) {
           customTime = timer.elapsed<std::chrono::microseconds>();
           outputFile << setupTime << "," << customTime << "," << (setupTime + customTime) << '\n';
       }
+  } else if (algorithmName == "TTLSA-custom") {
+
+      // TTLSA can only deal with undirected graphs.
+      // Graph can be considered undirected if every edge exists both ways and has same travel time both ways.
+      FORALL_VALID_EDGES(graph, u, e) {
+              KASSERT(graph.template get<TravelTimeAttribute>(e) != TravelTimeAttribute::defaultValue());
+              const auto eBack = graph.uniqueEdgeBetween(graph.edgeHead(e), u);
+              KASSERT(eBack >= 0 && eBack < graph.numEdges());
+              KASSERT(graph.template get<TravelTimeAttribute>(e) == graph.template get<TravelTimeAttribute>(eBack));
+          }
+
+      // Convert the input graph to TTLSA representation.
+      ttlsa::road_network::Graph ttlsaGraph;
+      ttlsaGraph.resize(graph.numVertices());
+      FORALL_VALID_EDGES(graph, u, e) {
+              // TTLSA graph node IDs start at 1
+              ttlsaGraph.add_edge(u + 1, graph.edgeHead(e) + 1, graph.template get<TravelTimeAttribute>(e), false);
+          }
+
+      if (!endsWith(outputFileName, ".csv"))
+          outputFileName += ".csv";
+      std::ofstream outputFile(outputFileName);
+      if (!outputFile.good())
+          throw std::invalid_argument("file cannot be opened -- '" + outputFileName + ".csv'");
+      outputFile << "# Graph: " << graphFileName << '\n';
+      outputFile << "setup,cch_customization,ttlsa_customization,total\n";
+
+      std::cout << "Preprocessing..." << std::flush;
+      // (Do not) contract degree 1 nodes
+      std::vector<ttlsa::road_network::Neighbor> closest;
+      ttlsaGraph.contract(closest, false);
+
+      // Build balanced tree hierarchy
+      std::vector<ttlsa::road_network::CutIndex> cutIndex;
+      static constexpr double CUT_BALANCE = 0.2;
+      static constexpr size_t LEAF_SIZE_THRESHOLD = 0;
+      ttlsaGraph.create_cut_index(cutIndex, CUT_BALANCE, LEAF_SIZE_THRESHOLD);
+
+      // Reset graph to original form before contractions
+      ttlsaGraph.reset();
+
+      // Initialize shortcut graph and labels
+      ttlsa::road_network::ContractionHierarchy ch;
+      ttlsaGraph.initialize(ch, cutIndex, closest);
+      ttlsa::road_network::ContractionIndex ci(cutIndex, closest);
+
+      std::cout << " done." << std::endl;
+
+      std::cout << "Running customization " << numCustomRuns << " times... " << std::flush;
+      Timer timer;
+      int64_t setupTime, cchCustomTime, ttlsaCustomTime;
+      ProgressBar progressBar(numCustomRuns);
+      for (auto i = 0; i < numCustomRuns; ++i) {
+
+          timer.restart();
+
+          // Customize CCH and HL with new metric on edges:
+          ttlsaGraph.reset(ch, ci);
+          std::vector<ttlsa::road_network::Edge> edges;
+          ttlsaGraph.get_edges(edges);
+          for (auto &e: edges) {
+              // TTLSA graph node IDs start at 1
+              const auto tail = e.a - 1;
+              const auto head = e.b - 1;
+              const auto eInInputGraph = graph.uniqueEdgeBetween(tail, head);
+              KASSERT(eInInputGraph >= 0 && eInInputGraph < graph.numEdges());
+              e.d = graph.travelTime(eInInputGraph);
+          }
+
+          setupTime = timer.elapsed<std::chrono::microseconds>();
+          timer.restart();
+
+          ttlsaGraph.customise_shortcut_graph(ch, ci, edges);
+
+          cchCustomTime = timer.elapsed<std::chrono::microseconds>();
+          timer.restart();
+          
+          ttlsaGraph.customise_hub_labelling(ch, ci);
+
+          ttlsaCustomTime = timer.elapsed<std::chrono::microseconds>();
+          outputFile << setupTime << "," << cchCustomTime << "," << ttlsaCustomTime << "," << (setupTime + cchCustomTime + ttlsaCustomTime) << '\n';
+          ++progressBar;
+      }
+      progressBar.finish();
+      std::cout << " done." << std::endl;
   } else {
 
     throw std::invalid_argument("invalid P2P algorithm -- '" + algorithmName + "'");
