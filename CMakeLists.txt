@@ -41,9 +41,10 @@ find_package(Boost REQUIRED)
 
 find_package(OpenMP)
 find_package(CGAL REQUIRED)
+find_library(proj_LIBRARY proj)
 find_library(cairo_LIBRARY cairo)
 
-include(FetchContentDependencies.cmake)
+#include(FetchContentDependencies.cmake)
 add_subdirectory(External)
 
 # Clang does not support the option -frounding-math, thus remove it from the CGAL compile options.

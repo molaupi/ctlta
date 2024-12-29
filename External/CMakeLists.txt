@@ -35,6 +35,25 @@ target_link_libraries(routingkit INTERFACE ${RoutingKit_LIBRARY})
 # include as SYSTEM to avoid warnings for features deprecated in C++20 as RoutingKit is C++17
 target_include_directories(routingkit SYSTEM INTERFACE ${RoutingKit_INCLUDE_DIR})
 
+# Add fast-cpp-csv-parser header-only library from git submodule.
+add_library(fast_cpp_csv_parser INTERFACE)
+target_include_directories(fast_cpp_csv_parser SYSTEM INTERFACE fast-cpp-csv-parser)
+
+# Add kassert header-only library from git submodule.
+add_library(kassert INTERFACE)
+target_include_directories(kassert SYSTEM INTERFACE kassert/include)
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(KASSERT_ASSERTION_LEVEL 40)
+else ()
+    set(KASSERT_ASSERTION_LEVEL 20)
+endif ()
+target_compile_definitions(kassert INTERFACE -DKASSERT_ASSERTION_LEVEL=${KASSERT_ASSERTION_LEVEL})
+
+# Add vectorclass header-only library from git submodule.
+add_library(vectorclass INTERFACE)
+target_include_directories(vectorclass SYSTEM INTERFACE vectorclass)
+
+
 # Add bundled rapidxml header only library as interface target
 add_library(rapidxml INTERFACE)
 target_include_directories(rapidxml SYSTEM INTERFACE rapidxml)

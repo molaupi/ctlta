@@ -15,7 +15,7 @@ target_link_libraries(ComputeUnionBoundary CGAL::CGAL ${PROJ_LIBRARY})
 add_executable(ConvertGraph ConvertGraph.cc)
 target_compile_definitions(ConvertGraph PRIVATE CSV_IO_NO_THREAD)
 target_compile_options(ConvertGraph PRIVATE ${FULL_WARNINGS})
-target_link_libraries(ConvertGraph proj routingkit kassert rapidxml fast_cpp_csv_parser)
+target_link_libraries(ConvertGraph ${proj_LIBRARY} routingkit kassert rapidxml fast_cpp_csv_parser)
 
 add_executable(DrawNetwork DrawNetwork.cc)
 target_compile_definitions(DrawNetwork PRIVATE CSV_IO_NO_THREAD)
