@@ -60,6 +60,7 @@ namespace trafficassignment {
                     const auto ttlsaTarget = targets[i] + 1;
 
                     ttlsa::road_network::distance_t dist;
+                    // TODO: Re-implement queries using only CCH in TTLSA lib.
                     const auto vertexPath = ttlsaGraph.query_contraction_hierarchy(ch, ttlsaSource, ttlsaTarget, dist);
 
                     // Find edges on path and add flow for every edge:

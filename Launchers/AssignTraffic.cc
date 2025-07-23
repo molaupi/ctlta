@@ -18,7 +18,7 @@
 #include "Algorithms/TrafficAssignment/Adapters/CCHAdapter.h"
 #include "Algorithms/TrafficAssignment/Adapters/CHAdapter.h"
 #include "Algorithms/TrafficAssignment/Adapters/TTLSAAdapter.h"
-#include "Algorithms/TrafficAssignment/Adapters/TTLSACCHAdapter.h"
+//#include "Algorithms/TrafficAssignment/Adapters/TTLSACCHAdapter.h"
 #include "Algorithms/TrafficAssignment/Adapters/DijkstraAdapter.h"
 #include "Algorithms/TrafficAssignment/ObjectiveFunctions/SystemOptimum.h"
 #include "Algorithms/TrafficAssignment/ObjectiveFunctions/UserEquilibrium.h"
@@ -319,8 +319,9 @@ void chooseShortestPathAlgo(const CommandLineParser& clp) {
       using FWAssignment = FrankWolfeAssignment<ObjFunctionT, TraversalCostFunctionT, trafficassignment::TTLSAAdapter, Graph>;
       assignTraffic<FWAssignment>(clp);
   } else if (algo == "TTLSACCH") {
-      using FWAssignment = FrankWolfeAssignment<ObjFunctionT, TraversalCostFunctionT, trafficassignment::TTLSACCHAdapter, Graph>;
-      assignTraffic<FWAssignment>(clp);
+//      using FWAssignment = FrankWolfeAssignment<ObjFunctionT, TraversalCostFunctionT, trafficassignment::TTLSACCHAdapter, Graph>;
+//      assignTraffic<FWAssignment>(clp);
+        throw std::invalid_argument("TTLSACCH is not supported right now.");
   } else if (algo == "TTL") {
       using FWAssignment = FrankWolfeAssignment<ObjFunctionT, TraversalCostFunctionT, trafficassignment::TTLAdapter, Graph>;
       assignTraffic<FWAssignment>(clp);

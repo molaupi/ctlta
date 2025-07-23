@@ -7,8 +7,6 @@
 #include <barrier>
 #include <cassert>
 
-#include "road_network.h"
-
 namespace ttlsa::util {
 
 // start new time measurement
@@ -35,23 +33,6 @@ void make_set(std::vector<T> &v)
 }
 
 template<typename T, class Compare>
-void make_set_(std::vector<T> &v, Compare comp)
-{
-    size_t v_size = v.size();
-    if (v_size < 2)
-        return;
-    std::sort(v.begin(), v.end(), comp);
-    size_t last_distinct = 0;
-    for (size_t next = 1; next < v_size; next++)
-        if (v[next] != v[last_distinct])
-        {
-            last_distinct++;
-            std::swap(v[next], v[last_distinct]);
-        }
-    v.erase(v.begin() + (last_distinct + 1), v.end());
-}
-
-template<typename T, class Compare>
 void make_set(std::vector<T> &v, Compare comp)
 {
     size_t v_size = v.size();
@@ -60,12 +41,10 @@ void make_set(std::vector<T> &v, Compare comp)
     std::sort(v.begin(), v.end(), comp);
     size_t last_distinct = 0;
     for (size_t next = 1; next < v_size; next++)
-        if (v[next].neighbor != v[last_distinct].neighbor)
+        if (comp(v[last_distinct], v[next]))
         {
-            last_distinct++;
-	    road_network::CHNeighbor temp = v[next];
-	    v[next] = v[last_distinct];
-	    v[last_distinct] = temp;
+            if (++last_distinct < next)
+                v[last_distinct] = v[next];
         }
     v.erase(v.begin() + (last_distinct + 1), v.end());
 }
