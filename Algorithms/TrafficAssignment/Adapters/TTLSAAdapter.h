@@ -131,7 +131,7 @@ namespace trafficassignment {
 
             // Contract degree 1 nodes
             std::vector<ttlsa::road_network::Neighbor> closest;
-            ttlsaGraph.contract(closest, false);
+            ttlsaGraph.contract(closest, true);
 
             // Build balanced tree hierarchy
             static constexpr double CUT_BALANCE = 0.2;
