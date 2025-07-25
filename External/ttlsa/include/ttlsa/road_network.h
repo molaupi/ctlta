@@ -279,7 +279,7 @@ struct composite_shortcut
     composite_shortcut();
 };
 
-const uint32_t MAX_VALLEY_PATH_LENGTH = 0; // matches size of composite_shortcut
+const uint32_t MAX_VALLEY_PATH_LENGTH = TTLSA_MAX_VALLEY_PATH_LENGTH; // matches size of composite_shortcut
 union path_data
 {
     std::array<NodeID, MAX_VALLEY_PATH_LENGTH> intermediate;
