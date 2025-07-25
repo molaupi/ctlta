@@ -1706,7 +1706,7 @@ namespace ttlsa::road_network {
         assert(is_undirected());
 #ifndef NDEBUG
         // sort neighbors to make algorithms deterministic
-        for (NodeID node : nodes)
+        for (NodeID node: nodes)
             sort(node_data[node].neighbors.begin(), node_data[node].neighbors.end());
 #endif
         // store original neighbor counts
@@ -2215,24 +2215,25 @@ void ContractionHierarchy::write(ostream &os) {
     }
 
     void Graph::reset(ContractionHierarchy &ch, ContractionIndex &tcl) const {
+        // setting up path_data
+        const path_data blank_path;
 
         // reseting ch
         for (NodeID x: ch.bottom_up_nodes) {
             for (CHNeighbor &n: ch.nodes[x].up_neighbors) {
                 n.distance = infinity;
-                n.p.cs.triangle_node = NO_NODE;
+                n.p = blank_path;
             }
         }
 
         for (NodeID x: ch.contracted_nodes) {
-            ch.nodes[x].up_neighbors[0].distance = 0;
-            ch.nodes[x].up_neighbors[0].p.cs.triangle_node = NO_NODE;
+            ch.nodes[x].up_neighbors[0].distance = infinity;
+            ch.nodes[x].up_neighbors[0].p = blank_path;
         }
 
         // reseting tcl
         for (NodeID x: ch.bottom_up_nodes) {
             FlatCutIndex cx = tcl.get_contraction_label(x).cut_index;
-            assert(cx.label_count() == 0 || cx.label_count() == cx.dist_index()[cx.cut_level()]);
             for (size_t anc = 0; anc < cx.label_count(); anc++)
                 cx.distances()[anc] = infinity;
         }
@@ -2370,7 +2371,8 @@ void ContractionHierarchy::write(ostream &os) {
         }
     }
 
-    vector <NodeID> Graph::query_path(const ContractionHierarchy &ch, const ContractionIndex &tcl, NodeID v, NodeID w, distance_t& dist) const {
+    vector <NodeID> Graph::query_path(const ContractionHierarchy &ch, const ContractionIndex &tcl, NodeID v, NodeID w,
+                                      distance_t &dist) const {
         ContractionLabel cv = tcl.get_contraction_label(v), cw = tcl.get_contraction_label(w);
         vector<NodeID> source, target;
         NodeID v_anc, w_anc;
@@ -2530,25 +2532,26 @@ void ContractionHierarchy::write(ostream &os) {
         // combing paths s-lca-t
         for (auto it = target.rbegin() + 1; it != target.rend(); it++) source.push_back(*it);
 
-        /*cout << "Final Path " << endl;
-        for(NodeID node: source) cout << node << " ";
-        cout << endl;*/
-
-        /*size_t i = 0;
-        NodeID s = source[i], t; distance_t weight = 0;
-        for (i = 1; i < source.size(); i++) {
-            t = source[i];
-            for(Neighbor n: node_data[s].neighbors) {
-                if(n.node == t) {
-                        weight += n.distance; break;
-                }
-            }
-            s = t;
-        }
-
-        distance_t d = get_distance(source[0], source[i-1], true);
-        if(d != weight)
-            cout << "***Length: " << weight << " " << d << endl;*/
+//        // Make sure path contains only valid edges
+//        size_t i = 0;
+//        NodeID s = source[i], t;
+//        distance_t weight = 0;
+//        for (i = 1; i < source.size(); i++) {
+//            t = source[i];
+//            bool found = false;
+//            for (Neighbor n: node_data[s].neighbors) {
+//                if (n.node == t) {
+//                    weight += n.distance;
+//                    found = true;
+//                    break;
+//                }
+//            }
+//            if (!found)
+//                throw std::runtime_error(
+//                        "Edge not found between " + std::to_string(s) + " and " + std::to_string(t) + ", source " +
+//                        std::to_string(v) + ", target " + std::to_string(w));
+//            s = t;
+//        }
 
         dist = min_dist + offset;
         return source;
