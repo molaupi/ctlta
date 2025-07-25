@@ -2199,24 +2199,25 @@ void ContractionHierarchy::write(ostream &os) {
     }
 
     void Graph::reset(ContractionHierarchy &ch) const {
+        static const path_data blank_path;
 
         // reseting ch
         for (NodeID x: ch.bottom_up_nodes) {
             for (CHNeighbor &n: ch.nodes[x].up_neighbors) {
                 n.distance = infinity;
-                n.p.cs.triangle_node = NO_NODE;
+                n.p = blank_path;
             }
         }
 
         for (NodeID x: ch.contracted_nodes) {
-            ch.nodes[x].up_neighbors[0].distance = 0;
-            ch.nodes[x].up_neighbors[0].p.cs.triangle_node = NO_NODE;
+            ch.nodes[x].up_neighbors[0].distance = infinity;
+            ch.nodes[x].up_neighbors[0].p = blank_path;
         }
     }
 
     void Graph::reset(ContractionHierarchy &ch, ContractionIndex &tcl) const {
         // setting up path_data
-        const path_data blank_path;
+        static const path_data blank_path;
 
         // reseting ch
         for (NodeID x: ch.bottom_up_nodes) {
@@ -2388,8 +2389,8 @@ void ContractionHierarchy::write(ostream &os) {
                 w_anc = w;
                 while (w_anc != v) {
                     source.push_back(w_anc);
-                    w_anc = ch.nodes[w_anc].up_neighbors[0].neighbor;
                     dist += ch.nodes[w_anc].up_neighbors[0].distance;
+                    w_anc = ch.nodes[w_anc].up_neighbors[0].neighbor;
                 }
                 source.push_back(w_anc);
                 reverse(source.begin(), source.end());
@@ -2399,8 +2400,8 @@ void ContractionHierarchy::write(ostream &os) {
                 v_anc = v;
                 while (v_anc != w) {
                     source.push_back(v_anc);
-                    v_anc = ch.nodes[v_anc].up_neighbors[0].neighbor;
                     dist += ch.nodes[v_anc].up_neighbors[0].distance;
+                    v_anc = ch.nodes[v_anc].up_neighbors[0].neighbor;
                 }
                 source.push_back(v_anc);
                 return source;
@@ -2427,21 +2428,21 @@ void ContractionHierarchy::write(ostream &os) {
             while (v_anc != w_anc) {
                 if (v_dist_offset < w_dist_offset) {
                     w_dist_offset = w_dist_offset - ch.nodes[w_anc].up_neighbors[0].distance;
-                    w_anc = ch.nodes[w_anc].up_neighbors[0].neighbor;
                     dist += ch.nodes[w_anc].up_neighbors[0].distance;
+                    w_anc = ch.nodes[w_anc].up_neighbors[0].neighbor;
                     target.push_back(w_anc);
                 } else if (v_dist_offset > w_dist_offset) {
                     v_dist_offset = v_dist_offset - ch.nodes[v_anc].up_neighbors[0].distance;
-                    v_anc = ch.nodes[v_anc].up_neighbors[0].neighbor;
                     dist += ch.nodes[v_anc].up_neighbors[0].distance;
+                    v_anc = ch.nodes[v_anc].up_neighbors[0].neighbor;
                     source.push_back(v_anc);
                 } else {
                     w_dist_offset = w_dist_offset - ch.nodes[w_anc].up_neighbors[0].distance;
                     v_dist_offset = v_dist_offset - ch.nodes[v_anc].up_neighbors[0].distance;
-                    w_anc = ch.nodes[w_anc].up_neighbors[0].neighbor;
-                    v_anc = ch.nodes[v_anc].up_neighbors[0].neighbor;
                     dist += ch.nodes[w_anc].up_neighbors[0].distance;
                     dist += ch.nodes[v_anc].up_neighbors[0].distance;
+                    w_anc = ch.nodes[w_anc].up_neighbors[0].neighbor;
+                    v_anc = ch.nodes[v_anc].up_neighbors[0].neighbor;
                     target.push_back(w_anc);
                     source.push_back(v_anc);
                 }

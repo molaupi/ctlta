@@ -76,7 +76,6 @@ namespace trafficassignment {
                         const auto head = vertexPath[j] - 1; // -1 because inputGraph vertex IDs start at 0
                         const auto e = inputGraph.uniqueEdgeBetween(tail, head);
                         KASSERT(e != -1);
-//                        paths[i].push_back(e);
                         ++localFlow[e];
                         recomputedDist += inputGraph.template get<WeightT>(e);
 
