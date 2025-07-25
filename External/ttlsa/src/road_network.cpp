@@ -2015,7 +2015,8 @@ void ContractionHierarchy::write(ostream &os) {
                                 ch.nodes[x].up_neighbors[i].distance = m;
 
                                 // memory reset
-                                memset(ch.nodes[x].up_neighbors[i].p.intermediate, NO_NODE, sizeof(ch.nodes[x].up_neighbors[i].p.intermediate));
+//                                memset(ch.nodes[x].up_neighbors[i].p.intermediate, NO_NODE, sizeof(ch.nodes[x].up_neighbors[i].p.intermediate));
+                                ch.nodes[x].up_neighbors[i].p.intermediate.fill(NO_NODE);
                                 ch.nodes[x].up_neighbors[i].p.cs.lower = nullptr;
                                 ch.nodes[x].up_neighbors[i].p.cs.upper = nullptr;
                                 ch.nodes[x].up_neighbors[i].p.cs.triangle_node = NO_NODE;
