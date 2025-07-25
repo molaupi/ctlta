@@ -1,5 +1,5 @@
-#include <ttlsa/road_network.h>
-#include <ttlsa/util.h>
+#include <ctlsa/road_network.h>
+#include <ctlsa/util.h>
 
 #include <vector>
 #include <queue>
@@ -23,7 +23,7 @@ using namespace std;
 static const bool weighted_furthest = false; // use edge weights for finding distant nodes during rough partitioning
 static const bool weighted_diff = false; // use edge weights for computing rough partition
 
-namespace ttlsa::road_network {
+namespace ctlsa::road_network {
 
     static const NodeID NO_NODE = 0; // null value equivalent for integers identifying nodes
     static const SubgraphID NO_SUBGRAPH = 0; // used to indicate that node does not belong to any active subgraph

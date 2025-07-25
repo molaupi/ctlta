@@ -14,26 +14,26 @@
 #include "Tools/Simd/AlignedVector.h"
 
 
-#include "Algorithms/TTL/BalancedTopologyCentricTreeHierarchy.h"
-#include "Algorithms/TTL/TTLMetric.h"
-#include "Algorithms/TTL/TTLQuery.h"
+#include "Algorithms/CTL/BalancedTopologyCentricTreeHierarchy.h"
+#include "Algorithms/CTL/CTLMetric.h"
+#include "Algorithms/CTL/CTLQuery.h"
 
 namespace trafficassignment {
 
-// An adapter that makes TTLs usable in the all-or-nothing assignment procedure.
+// An adapter that makes CTLs usable in the all-or-nothing assignment procedure.
     template<typename InputGraphT, typename WeightT>
-    class TTLAdapter {
+    class CTLAdapter {
 
-        using TTLLabelSet = std::conditional_t<TTL_SIMD_LOGK == 0,
+        using CTLLabelSet = std::conditional_t<CTL_SIMD_LOGK == 0,
                 BasicLabelSet<0, ParentInfo::FULL_PARENT_INFO>,
-                SimdLabelSet<TTL_SIMD_LOGK, ParentInfo::FULL_PARENT_INFO>>;
-        using LabellingT = TruncatedTreeLabelling<TTLLabelSet>;
-        using TTLMetricT = TTLMetric<LabellingT>;
+                SimdLabelSet<CTL_SIMD_LOGK, ParentInfo::FULL_PARENT_INFO>>;
+        using LabellingT = TruncatedTreeLabelling<CTLLabelSet>;
+        using CTLMetricT = CTLMetric<LabellingT>;
 
     public:
 
         // The number of source-target pairs per call to the query algorithm.
-        // In the case of TTL, the K searches are computed sequentially.
+        // In the case of CTL, the K searches are computed sequentially.
         static constexpr int K = 1 << TA_LOG_K;
 
         using InputGraph = InputGraphT;
@@ -43,15 +43,15 @@ namespace trafficassignment {
         class QueryAlgo {
         public:
             // Constructs a query algorithm instance working on the specified data.
-            QueryAlgo(const BalancedTopologyCentricTreeHierarchy &hierarchy, const LabellingT &ttl,
-                      const TTLMetricT &metric,
+            QueryAlgo(const BalancedTopologyCentricTreeHierarchy &hierarchy, const LabellingT &ctl,
+                      const CTLMetricT &metric,
                       const Permutation &ranks,
                       AlignedVector<int> &flowsOnUpEdges, AlignedVector<int> &flowsOnDownEdges) :
                     upGraph(metric.upwardGraph()),
                     downGraph(metric.downwardGraph()),
                     ranks(ranks),
-                    ttlQuery(hierarchy, metric.upwardGraph(), metric.downwardGraph(), metric.upwardWeights(),
-                             metric.downwardWeights(), ttl),
+                    ctlQuery(hierarchy, metric.upwardGraph(), metric.downwardGraph(), metric.upwardWeights(),
+                             metric.downwardWeights(), ctl),
                     flowsOnUpEdges(flowsOnUpEdges),
                     flowsOnDownEdges(flowsOnDownEdges),
                     localFlowsOnUpEdges(flowsOnUpEdges.size(), 0),
@@ -66,14 +66,14 @@ namespace trafficassignment {
             // i.e., only pairs 0..k are relevant.
             void run(std::array<int, K> &sources, std::array<int, K> &targets, const int k) {
 
-                // No facilities for centralized searches in TTL. Run each search individually:
+                // No facilities for centralized searches in CTL. Run each search individually:
                 for (auto j = 0; j < k; ++j) {
-                    ttlQuery.run(ranks[sources[j]], ranks[targets[j]]);
-                    distances[j] = ttlQuery.getDistance();
+                    ctlQuery.run(ranks[sources[j]], ranks[targets[j]]);
+                    distances[j] = ctlQuery.getDistance();
 
                     // Assign flow to the edges (possibly shortcuts) on the computed paths.
-                    const auto &upEdges = ttlQuery.getEdgesOnUpPathUnordered();
-                    const auto &downEdges = ttlQuery.getEdgesOnDownPathUnordered();
+                    const auto &upEdges = ctlQuery.getEdgesOnUpPathUnordered();
+                    const auto &downEdges = ctlQuery.getEdgesOnDownPathUnordered();
                     for (const auto &e: upEdges) {
                         KASSERT(e >= 0);
                         KASSERT(e < localFlowsOnUpEdges.size());
@@ -105,10 +105,10 @@ namespace trafficassignment {
 
         private:
 
-            const TTLMetricT::SearchGraph &upGraph;
-            const TTLMetricT::SearchGraph &downGraph;
+            const CTLMetricT::SearchGraph &upGraph;
+            const CTLMetricT::SearchGraph &downGraph;
             const Permutation &ranks; // rank[v] is the rank of vertex v in the contraction order
-            TTLQuery <TTLMetricT::SearchGraph, LabellingT> ttlQuery;
+            CTLQuery <CTLMetricT::SearchGraph, LabellingT> ctlQuery;
             std::array<int, K> distances; // distances computed in last call to run()
 
             AlignedVector<int> &flowsOnUpEdges;     // The flows in the upward graph.
@@ -117,10 +117,10 @@ namespace trafficassignment {
             std::vector<int> localFlowsOnDownEdges; // The local flows in the downward graph.
         };
 
-        // Constructs an adapter for TTLs.
-        explicit TTLAdapter(const InputGraphT &inputGraph)
+        // Constructs an adapter for CTLs.
+        explicit CTLAdapter(const InputGraphT &inputGraph)
                 : inputGraph(inputGraph), treeHierarchy(), cch(),
-                  metric(treeHierarchy, cch, &inputGraph.template get<WeightT>(0)), ttl(treeHierarchy) {
+                  metric(treeHierarchy, cch, &inputGraph.template get<WeightT>(0)), ctl(treeHierarchy) {
             assert(inputGraph.numEdges() > 0);
             assert(inputGraph.isDefrag());
         }
@@ -170,26 +170,26 @@ namespace trafficassignment {
             treeHierarchy.preprocess(inputGraph, sepDecomp);
 
             // Allocate labels.
-            ttl.init();
+            ctl.init();
         }
 
         // Invoked before each iteration.
         void customize() {
-            metric.buildCustomizedTTL(ttl);
+            metric.buildCustomizedCTL(ctl);
             flowsOnUpEdges.assign(metric.upwardGraph().numEdges(), 0);
             flowsOnDownEdges.assign(metric.downwardGraph().numEdges(), 0);
         }
 
         // Returns an instance of the query algorithm.
         QueryAlgo getQueryAlgoInstance() {
-            return {treeHierarchy, ttl, metric, cch.getRanks(), flowsOnUpEdges, flowsOnDownEdges};
+            return {treeHierarchy, ctl, metric, cch.getRanks(), flowsOnUpEdges, flowsOnDownEdges};
         }
 
         // Propagates the flows on the edges in the search graphs to the edges in the input graph.
         void propagateFlowsToInputEdges(AlignedVector<int> &flowsOnInputEdges) {
-            const TTLMetricT::SearchGraph &upGraph = metric.upwardGraph();
-            const TTLMetricT::SearchGraph &downGraph = metric.downwardGraph();
-            propagateFlowsToInputEdgesImpl<TTLMetricT::SearchGraph>(flowsOnInputEdges, upGraph, downGraph);
+            const CTLMetricT::SearchGraph &upGraph = metric.upwardGraph();
+            const CTLMetricT::SearchGraph &downGraph = metric.downwardGraph();
+            propagateFlowsToInputEdgesImpl<CTLMetricT::SearchGraph>(flowsOnInputEdges, upGraph, downGraph);
         }
 
         // Propagates the flows on the edges in the search graphs to the edges in the input graph using stored
@@ -320,10 +320,10 @@ namespace trafficassignment {
         }
 
         const InputGraphT &inputGraph; // The input graph in TA format.
-        BalancedTopologyCentricTreeHierarchy treeHierarchy; // Tree hierarchy underlying TTL
+        BalancedTopologyCentricTreeHierarchy treeHierarchy; // Tree hierarchy underlying CTL
         CCH cch;                      // The metric-independent CCH.
-        TTLMetricT metric;      // The current metric for the CCH.
-        LabellingT ttl;   // The customized tree labelling.
+        CTLMetricT metric;      // The current metric for the CCH.
+        LabellingT ctl;   // The customized tree labelling.
 
         AlignedVector<int> flowsOnUpEdges;   // The flows on the edges in the upward graph.
         AlignedVector<int> flowsOnDownEdges; // The flows on the edges in the downward graph.

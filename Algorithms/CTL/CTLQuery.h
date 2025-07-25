@@ -1,10 +1,10 @@
 #pragma once
 
-#include "Algorithms/TTL/TruncatedTreeLabelling.h"
+#include "Algorithms/CTL/TruncatedTreeLabelling.h"
 #include "Algorithms/Dijkstra/DagShortestPaths.h"
 
 template<typename SearchGraphT, typename LabellingT>
-class TTLQuery {
+class CTLQuery {
 
     using LabelSet = typename LabellingT::LabelSet;
     static constexpr uint32_t K = LabelSet::K;
@@ -73,9 +73,9 @@ class TTLQuery {
         PruneSearchAtUntruncatedVertices(TemporaryLabel &temporaryLabel,
                                          std::vector<int32_t> &truncatedSearchSpace,
                                          const BalancedTopologyCentricTreeHierarchy &hierarchy,
-                                         const LabellingT &ttl)
+                                         const LabellingT &ctl)
                 : temporaryLabel(temporaryLabel), truncatedSearchSpace(truncatedSearchSpace), hierarchy(hierarchy),
-                  ttl(ttl) {}
+                  ctl(ctl) {}
 
         template<typename DistanceLabelT, typename DistanceLabelContainerT>
         bool operator()(const int v, DistanceLabelT &distToV, DistanceLabelContainerT &) {
@@ -87,7 +87,7 @@ class TTLQuery {
             }
 
             // Update temporary label of source / target with label of v.
-            const auto labelOfV = UP ? ttl.upLabel(v) : ttl.downLabel(v);
+            const auto labelOfV = UP ? ctl.upLabel(v) : ctl.downLabel(v);
             const auto maxVec = std::min(temporaryLabel.numBatches(), labelOfV.numBatches);
             for (auto i = 0; i < maxVec; ++i) {
                 const Batch distViaV = distToV[0] + labelOfV.distBatch(i);
@@ -107,24 +107,24 @@ class TTLQuery {
         TemporaryLabel &temporaryLabel;
         std::vector<int32_t> &truncatedSearchSpace;
         const BalancedTopologyCentricTreeHierarchy &hierarchy;
-        const LabellingT &ttl;
+        const LabellingT &ctl;
     };
 
     using TruncatedVertexUpwardSearch = DagShortestPaths<SearchGraphT, BasicLabelSet<0, ParentInfo::FULL_PARENT_INFO>, PruneSearchAtUntruncatedVertices<true>>;
     using TruncatedVertexDownwardSearch = DagShortestPaths<SearchGraphT, BasicLabelSet<0, ParentInfo::FULL_PARENT_INFO>, PruneSearchAtUntruncatedVertices<false>>;
 
 public:
-    TTLQuery(const BalancedTopologyCentricTreeHierarchy &hierarchy,
+    CTLQuery(const BalancedTopologyCentricTreeHierarchy &hierarchy,
              const SearchGraphT &upGraph,
              const SearchGraphT &downGraph,
              int const *const upWeights,
              int const *const downWeights,
-             const LabellingT &ttl)
-            : hierarchy(hierarchy), upGraph(upGraph), downGraph(downGraph), ttl(ttl),
+             const LabellingT &ctl)
+            : hierarchy(hierarchy), upGraph(upGraph), downGraph(downGraph), ctl(ctl),
               buildUpLabelSearch(upGraph, upWeights,
-                                 {tempUpLabel, upTruncatedSearchSpace, hierarchy, ttl}),
+                                 {tempUpLabel, upTruncatedSearchSpace, hierarchy, ctl}),
               buildDownLabelSearch(downGraph, downWeights,
-                                   {tempDownLabel, downTruncatedSearchSpace, hierarchy, ttl}) {
+                                   {tempDownLabel, downTruncatedSearchSpace, hierarchy, ctl}) {
     }
 
     // Expects ranks in the underlying separator decomposition order as inputs.
@@ -137,16 +137,16 @@ public:
         const auto lch = hierarchy.getLowestCommonHub(s, t);
 
         if (!hierarchy.isVertexTruncated(s) && !hierarchy.isVertexTruncated(t)) {
-            const auto sUpLabel = ttl.upLabel(s);
-            const auto tDownLabel = ttl.downLabel(t);
+            const auto sUpLabel = ctl.upLabel(s);
+            const auto tDownLabel = ctl.downLabel(t);
             computeMinDistanceInLabels(sUpLabel, tDownLabel, lch);
         } else if (!hierarchy.isVertexTruncated(s)) {
-            const auto sUpLabel = ttl.upLabel(s);
+            const auto sUpLabel = ctl.upLabel(s);
             buildTempDownLabel(t, lch);
             computeMinDistanceInLabels(sUpLabel, tempDownLabel, lch);
         } else if (!hierarchy.isVertexTruncated(t)) {
             buildTempUpLabel(s, lch);
-            const auto tDownLabel = ttl.downLabel(t);
+            const auto tDownLabel = ctl.downLabel(t);
             computeMinDistanceInLabels(tempUpLabel, tDownLabel, lch);
         } else {
             buildTempUpLabel(s, lch);
@@ -206,7 +206,7 @@ public:
 
         // Enumerate path from access vertex to meeting hub using path edges stored in labels.
         int32_t e;
-        while ((e = ttl.upPathEdge(v, lastMeetingHubIdx)) != INVALID_EDGE) {
+        while ((e = ctl.upPathEdge(v, lastMeetingHubIdx)) != INVALID_EDGE) {
             KASSERT(e >= 0 && e < upGraph.numEdges());
             lastUpPath.push_back(e);
             v = upGraph.edgeHead(e);
@@ -242,7 +242,7 @@ public:
 
         // Enumerate path from access vertex to meeting hub using path edges stored in labels.
         int32_t e;
-        while ((e = ttl.upPathEdge(v, lastMeetingHubIdx)) != INVALID_EDGE) {
+        while ((e = ctl.upPathEdge(v, lastMeetingHubIdx)) != INVALID_EDGE) {
             KASSERT(e >= 0 && e < upGraph.numEdges());
             lastUpPath.push_back(e);
             v = upGraph.edgeHead(e);
@@ -277,7 +277,7 @@ public:
 
         // Enumerate path from access vertex to meeting hub using path edges stored in labels.
         int32_t e;
-        while ((e = ttl.downPathEdge(v, lastMeetingHubIdx)) != INVALID_EDGE) {
+        while ((e = ctl.downPathEdge(v, lastMeetingHubIdx)) != INVALID_EDGE) {
             KASSERT(e >= 0 && e < downGraph.numEdges());
             lastDownPath.push_back(e);
             v = downGraph.edgeHead(e);
@@ -313,7 +313,7 @@ public:
 
         // Enumerate path from access vertex to meeting hub using path edges stored in labels.
         int32_t e;
-        while ((e = ttl.downPathEdge(v, lastMeetingHubIdx)) != INVALID_EDGE) {
+        while ((e = ctl.downPathEdge(v, lastMeetingHubIdx)) != INVALID_EDGE) {
             KASSERT(e >= 0 && e < downGraph.numEdges());
             lastDownPath.push_back(e);
             v = downGraph.edgeHead(e);
@@ -384,7 +384,7 @@ private:
     const BalancedTopologyCentricTreeHierarchy &hierarchy;
     const SearchGraphT &upGraph;
     const SearchGraphT &downGraph;
-    const LabellingT &ttl;
+    const LabellingT &ctl;
 
     int32_t lastS;
     int32_t lastT;

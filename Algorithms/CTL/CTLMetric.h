@@ -1,18 +1,18 @@
 #pragma once
 
-#include "Algorithms/TTL/TruncatedTreeLabelling.h"
-#include "Algorithms/TTL/BalancedTopologyCentricTreeHierarchy.h"
+#include "Algorithms/CTL/TruncatedTreeLabelling.h"
+#include "Algorithms/CTL/BalancedTopologyCentricTreeHierarchy.h"
 #include "Algorithms/CCH/CCHMetric.h"
 #include <vectorclass.h>
 #include "Tools/Constants.h"
 
-#ifndef TTL_USE_PERFECT_CUSTOMIZATION
-#define TTL_USE_PERFECT_CUSTOMIZATION false
+#ifndef CTL_USE_PERFECT_CUSTOMIZATION
+#define CTL_USE_PERFECT_CUSTOMIZATION false
 #endif
 
 // An individual metric for truncated tree labelling. Uses a CCH to build customized hub labelling.
-template<typename LabellingT, bool USE_PERFECT_CUSTOMIZATION = TTL_USE_PERFECT_CUSTOMIZATION>
-class TTLMetric {
+template<typename LabellingT, bool USE_PERFECT_CUSTOMIZATION = CTL_USE_PERFECT_CUSTOMIZATION>
+class CTLMetric {
 
 public:
 
@@ -20,15 +20,15 @@ public:
 
     // Constructs an individual metric incorporating the specified input weights in the specified
     // BalancedTopologyCentricTreeHierarchy on the basis of the specified CCH.
-    TTLMetric(const BalancedTopologyCentricTreeHierarchy &hierarchy, const CCH &cch, const int32_t *const inputWeights)
+    CTLMetric(const BalancedTopologyCentricTreeHierarchy &hierarchy, const CCH &cch, const int32_t *const inputWeights)
             : hierarchy(hierarchy), cch(cch), cchMetric(cch, inputWeights), minimumWeightedCH() {}
 
-    void buildCustomizedTTL(LabellingT &ttl) {
+    void buildCustomizedCTL(LabellingT &ctl) {
         if constexpr (USE_PERFECT_CUSTOMIZATION)
             minimumWeightedCH = cchMetric.buildMinimumWeightedCH();
         else
             cchMetric.customize();
-        customizeLabelling(ttl);
+        customizeLabelling(ctl);
     }
 
     // Returns the upward graph of the metric, which is either the CCH graph or the upward graph after perfect
@@ -72,8 +72,8 @@ private:
     using Batch = typename LabelSet::DistanceLabel;
     using BatchMask = typename LabelSet::LabelMask;
 
-    void customizeLabelling(LabellingT &ttl) {
-        ttl.reset();
+    void customizeLabelling(LabellingT &ctl) {
+        ctl.reset();
 
         const auto &upGraph = upwardGraph();
         const auto &downGraph = downwardGraph(); // reverse downward graph
@@ -91,7 +91,7 @@ private:
             const auto numHubsU = hierarchy.getNumHubs(u);
 
             // Customize upward label of u using upper neighbors
-            auto uUpLabel = ttl.upLabel(u);
+            auto uUpLabel = ctl.upLabel(u);
             uUpLabel.initializeLastHubDist(); // distance to self
             if constexpr (LabelSet::KEEP_PARENT_EDGES)
                 uUpLabel.initializeLastHubPathEdge(); // edge to self
@@ -101,7 +101,7 @@ private:
                 const auto numHubsV = hierarchy.getNumHubs(v);
                 KASSERT(numHubsV < numHubsU);
                 KASSERT(numHubsV == hierarchy.getLowestCommonHub(u, v));
-                const auto vUpLabel = ttl.cUpLabel(v);
+                const auto vUpLabel = ctl.cUpLabel(v);
                 const uint32_t numBlocks = numHubsV / K + (numHubsV % K != 0);
                 const Batch weightAsBatch(upWeight);
                 const Batch eAsBatch(e);
@@ -118,7 +118,7 @@ private:
             }
 
             // Customize (reverse) downward label of u using upper neighbors
-            auto uDownLabel = ttl.downLabel(u);
+            auto uDownLabel = ctl.downLabel(u);
             uDownLabel.initializeLastHubDist(); // distance to self
             if constexpr (LabelSet::KEEP_PARENT_EDGES)
                 uDownLabel.initializeLastHubPathEdge(); // edge to self
@@ -128,7 +128,7 @@ private:
                 const auto numHubsV = hierarchy.getNumHubs(v);
                 KASSERT(numHubsV < numHubsU);
                 KASSERT(numHubsV == hierarchy.getLowestCommonHub(u, v));
-                const auto vDownLabel = ttl.cDownLabel(v);
+                const auto vDownLabel = ctl.cDownLabel(v);
                 const uint32_t numBlocks = numHubsV / K + (numHubsV % K != 0);
                 const Batch weightAsBatch(downWeight);
                 const Batch eAsBatch(e);

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Algorithms/TTL/BalancedTopologyCentricTreeHierarchy.h"
+#include "Algorithms/CTL/BalancedTopologyCentricTreeHierarchy.h"
 #include "DataStructures/Labels/BasicLabelSet.h"
 #include "DataStructures/Labels/SimdLabelSet.h"
 

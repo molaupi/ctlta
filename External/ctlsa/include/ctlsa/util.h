@@ -7,7 +7,7 @@
 #include <barrier>
 #include <cassert>
 
-namespace ttlsa::util {
+namespace ctlsa::util {
 
 // start new time measurement
 void start_timer();
@@ -232,6 +232,6 @@ std::ostream& operator<<(std::ostream& os, const std::pair<A,B> &p)
     return os << "(" << p.first << "," << p.second << ")";
 }
 
-std::ostream& operator<<(std::ostream& os, ttlsa::util::Summary s);
+std::ostream& operator<<(std::ostream& os, ctlsa::util::Summary s);
 
 } // std

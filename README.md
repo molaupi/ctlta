@@ -35,7 +35,7 @@ Once you installed the packages, type the following commands at the top-level di
 the framework:
 
 ```
-$ cmake -S . -B Build/Release_<theta> -DCMAKE_BUILD_TYPE=Release -DTTL_THETA=<theta>
+$ cmake -S . -B Build/Release_<theta> -DCMAKE_BUILD_TYPE=Release -DCTL_THETA=<theta>
 $ cmake --build Build/Release_<theta> --target AssignTraffic
 ```
 
@@ -52,12 +52,12 @@ the file `Launchers/AssignTraffic.cc`.
 For example, for `Stuttgart-morn-undirected`, use:
 
 ```
-$ Build/Release_<theta>/Launchers/AssignTraffic -v -p 1 -n 50 -a TTLSA \
+$ Build/Release_<theta>/Launchers/AssignTraffic -v -p 1 -n 50 -a CTLSA \
     -g <path>/Inputs/Graphs/Visum_Stuttgart_undirected.gr.bin
     -d <path>/Inputs/ODPairs/Visum_Stuttgart_morn_undirected.csv
-    -flow <path>/Outputs/Stuttgart_morn_undirected/flow_TTLSA_TH<theta> \
-    -dist <path>/Outputs/Stuttgart_morn_undirected/dist_TTLSA_TH<theta> \
-    -stat <path>/Outputs/Stuttgart_morn_undirected/stat_TTLSA_TH<theta>
+    -flow <path>/Outputs/Stuttgart_morn_undirected/flow_CTLSA_TH<theta> \
+    -dist <path>/Outputs/Stuttgart_morn_undirected/dist_CTLSA_TH<theta> \
+    -stat <path>/Outputs/Stuttgart_morn_undirected/stat_CTLSA_TH<theta>
 ```
 
 The argument `-v` makes the executable print out statistics for every 
@@ -68,10 +68,10 @@ for `morn` and `even`, to 24 for `day` and to 168 for `week`.
 
 The argument `-n` specifies the number of iterations to run.
 
-The argument `-a` specifies the algorithm. TTLSA stands for TTL standalone, 
+The argument `-a` specifies the algorithm. CTLSA stands for CTL standalone, 
 which is your implementation of CTL. It is run with the theta value specified 
 earlier when building. 
-If you want to run TA with your CCH implementation use `-a TTLSACCH`. 
+If you want to run TA with your CCH implementation use `-a CTLSACCH`. 
 The theta value doesn't matter for this, obviously. 
 
 The argument `-g` is a path to the road network in the binary representation 

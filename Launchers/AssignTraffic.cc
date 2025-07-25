@@ -17,8 +17,8 @@
 #include "Algorithms/TrafficAssignment/Adapters/BiDijkstraAdapter.h"
 #include "Algorithms/TrafficAssignment/Adapters/CCHAdapter.h"
 #include "Algorithms/TrafficAssignment/Adapters/CHAdapter.h"
-#include "Algorithms/TrafficAssignment/Adapters/TTLSAAdapter.h"
-//#include "Algorithms/TrafficAssignment/Adapters/TTLSACCHAdapter.h"
+#include "Algorithms/TrafficAssignment/Adapters/CTLSAAdapter.h"
+//#include "Algorithms/TrafficAssignment/Adapters/CTLSACCHAdapter.h"
 #include "Algorithms/TrafficAssignment/Adapters/DijkstraAdapter.h"
 #include "Algorithms/TrafficAssignment/ObjectiveFunctions/SystemOptimum.h"
 #include "Algorithms/TrafficAssignment/ObjectiveFunctions/UserEquilibrium.h"
@@ -40,7 +40,7 @@
 #include "Tools/CommandLine/CommandLineParser.h"
 #include "Tools/Constants.h"
 #include "Tools/StringHelpers.h"
-#include "Algorithms/TrafficAssignment/Adapters/TTLAdapter.h"
+#include "Algorithms/TrafficAssignment/Adapters/CTLAdapter.h"
 
 inline void printUsage() {
   std::cout <<
@@ -56,7 +56,7 @@ inline void printUsage() {
       "  -f <func>         traversal cost function\n"
       "                      possible values: BPR (default) Davidson M-Davidson inverse\n"
       "  -a <algo>         shortest-path algorithm\n"
-      "                      possible values: Dijkstra Bi-Dijkstra CH CCH (default) TTLSA TTLSACCH TTL\n"
+      "                      possible values: Dijkstra Bi-Dijkstra CH CCH (default) CTLSA CTLSACCH CTL\n"
       "  -o <ord>          order in which the OD pairs are processed\n"
       "                      possible values: random input sorted (default)\n"
       "  -U <num>          maximum diameter of a cell (used for ordering OD pairs)\n"
@@ -315,15 +315,15 @@ void chooseShortestPathAlgo(const CommandLineParser& clp) {
     using FWAssignment = FrankWolfeAssignment<
         ObjFunctionT, TraversalCostFunctionT, trafficassignment::CCHAdapter, Graph>;
     assignTraffic<FWAssignment>(clp);
-  } else if (algo == "TTLSA") {
-      using FWAssignment = FrankWolfeAssignment<ObjFunctionT, TraversalCostFunctionT, trafficassignment::TTLSAAdapter, Graph>;
+  } else if (algo == "CTLSA") {
+      using FWAssignment = FrankWolfeAssignment<ObjFunctionT, TraversalCostFunctionT, trafficassignment::CTLSAAdapter, Graph>;
       assignTraffic<FWAssignment>(clp);
-  } else if (algo == "TTLSACCH") {
-//      using FWAssignment = FrankWolfeAssignment<ObjFunctionT, TraversalCostFunctionT, trafficassignment::TTLSACCHAdapter, Graph>;
+  } else if (algo == "CTLSACCH") {
+//      using FWAssignment = FrankWolfeAssignment<ObjFunctionT, TraversalCostFunctionT, trafficassignment::CTLSACCHAdapter, Graph>;
 //      assignTraffic<FWAssignment>(clp);
-        throw std::invalid_argument("TTLSACCH is not supported right now.");
-  } else if (algo == "TTL") {
-      using FWAssignment = FrankWolfeAssignment<ObjFunctionT, TraversalCostFunctionT, trafficassignment::TTLAdapter, Graph>;
+        throw std::invalid_argument("CTLSACCH is not supported right now.");
+  } else if (algo == "CTL") {
+      using FWAssignment = FrankWolfeAssignment<ObjFunctionT, TraversalCostFunctionT, trafficassignment::CTLAdapter, Graph>;
       assignTraffic<FWAssignment>(clp);
   } else {
     throw std::invalid_argument("unrecognized shortest-path algorithm -- '" + algo + "'");

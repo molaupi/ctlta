@@ -22,7 +22,7 @@
 class CCHMetric {
 
     template<typename, bool>
-    friend class TTLMetric;
+    friend class CTLMetric;
 
  public:
   // Constructs an individual metric incorporating the specified input weights in the specified CCH.

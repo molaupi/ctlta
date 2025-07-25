@@ -11,7 +11,7 @@
 
 class BalancedTopologyCentricTreeHierarchy {
 
-    static constexpr uint32_t MaxTruncatedSubtreeSize = TTL_THETA;
+    static constexpr uint32_t MaxTruncatedSubtreeSize = CTL_THETA;
 
 public:
 

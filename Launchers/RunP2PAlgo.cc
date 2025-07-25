@@ -10,10 +10,10 @@
 #include <csv.h>
 #include <routingkit/nested_dissection.h>
 
-#include "Algorithms/TTL/BalancedTopologyCentricTreeHierarchy.h"
-#include "Algorithms/TTL/TruncatedTreeLabelling.h"
-#include "Algorithms/TTL/TTLMetric.h"
-#include "Algorithms/TTL/TTLQuery.h"
+#include "Algorithms/CTL/BalancedTopologyCentricTreeHierarchy.h"
+#include "Algorithms/CTL/TruncatedTreeLabelling.h"
+#include "Algorithms/CTL/CTLMetric.h"
+#include "Algorithms/CTL/CTLQuery.h"
 #include "Algorithms/CCH/CCH.h"
 #include "Algorithms/CCH/CCHMetric.h"
 #include "Algorithms/CCH/EliminationTreeQuery.h"
@@ -32,7 +32,7 @@
 #include "Tools/CommandLine/CommandLineParser.h"
 #include "Tools/StringHelpers.h"
 #include "Tools/Timer.h"
-#include "External/ttlsa/include/ttlsa/road_network.h"
+#include <ctlsa/road_network.h>
 #include "Tools/CommandLine/ProgressBar.h"
 
 inline void printUsage() {
@@ -257,9 +257,9 @@ inline void runQueries(const CommandLineParser& clp) {
     CCHTree algo(minCH, cch.getEliminationTree());
     runQueries(algo, demandFileName, outputFile, [&](const int v) { return minCH.rank(v); });
 
-  } else if (algorithmName == "TTL") {
+  } else if (algorithmName == "CTL") {
 
-      // Run truncated tree labelling (TTL) queries
+      // Run truncated tree labelling (CTL) queries
       std::ifstream graphFile(graphFileName, std::ios::binary);
       if (!graphFile.good())
           throw std::invalid_argument("file not found -- '" + graphFileName + "'");
@@ -279,24 +279,24 @@ inline void runQueries(const CommandLineParser& clp) {
       BalancedTopologyCentricTreeHierarchy treeHierarchy;
       treeHierarchy.preprocess(graph, sepDecomp);
 
-      using TTLLabelSet = std::conditional_t<TTL_SIMD_LOGK == 0,
+      using CTLLabelSet = std::conditional_t<CTL_SIMD_LOGK == 0,
               BasicLabelSet<0, ParentInfo::NO_PARENT_INFO>,
-              SimdLabelSet<TTL_SIMD_LOGK, ParentInfo::NO_PARENT_INFO>>;
-      using LabellingT = TruncatedTreeLabelling<TTLLabelSet>;
-      LabellingT ttl(treeHierarchy);
-      ttl.init();
+              SimdLabelSet<CTL_SIMD_LOGK, ParentInfo::NO_PARENT_INFO>>;
+      using LabellingT = TruncatedTreeLabelling<CTLLabelSet>;
+      LabellingT ctl(treeHierarchy);
+      ctl.init();
 
-      TTLMetric<LabellingT> metric(treeHierarchy, cch, useLengths? &graph.length(0) : &graph.travelTime(0));
-      metric.buildCustomizedTTL(ttl);
+      CTLMetric<LabellingT> metric(treeHierarchy, cch, useLengths ? &graph.length(0) : &graph.travelTime(0));
+      metric.buildCustomizedCTL(ctl);
 
       outputFile << "# Graph: " << graphFileName << '\n';
       outputFile << "# Separator: " << sepFileName << '\n';
       outputFile << "# OD pairs: " << demandFileName << '\n';
       static constexpr uint64_t BYTES_PER_MB = 1 << 20;
-      outputFile << "# Mem hierarchy = " << treeHierarchy.sizeInBytes() / BYTES_PER_MB << " MB, Mem labelling = " << ttl.sizeInBytes() / BYTES_PER_MB << " MB" << '\n';
+      outputFile << "# Mem hierarchy = " << treeHierarchy.sizeInBytes() / BYTES_PER_MB << " MB, Mem labelling = " << ctl.sizeInBytes() / BYTES_PER_MB << " MB" << '\n';
 
-      TTLQuery<TTLMetric<LabellingT>::SearchGraph, LabellingT> algo(treeHierarchy, metric.upwardGraph(), metric.downwardGraph(), metric.upwardWeights(),
-                                              metric.downwardWeights(), ttl);
+      CTLQuery<CTLMetric<LabellingT>::SearchGraph, LabellingT> algo(treeHierarchy, metric.upwardGraph(), metric.downwardGraph(), metric.upwardWeights(),
+                                                                    metric.downwardWeights(), ctl);
       runQueries(algo, demandFileName, outputFile, [&](const int v) { return cch.getRanks()[v]; });
   } else {
 
@@ -431,8 +431,8 @@ inline void runPreprocessing(const CommandLineParser& clp) {
       outputFile << basicCustom << ',' << perfectCustom << ',' << construct << ',' << tot << '\n';
     }
 
-  } else if (algorithmName == "TTL") {
-      // Run the preprocessing phase of TTL.
+  } else if (algorithmName == "CTL") {
+      // Run the preprocessing phase of CTL.
       if (imbalance < 0)
           throw std::invalid_argument("invalid imbalance -- '" + std::to_string(imbalance) + "'");
 
@@ -478,7 +478,7 @@ inline void runPreprocessing(const CommandLineParser& clp) {
       if (!outputFile.good())
           throw std::invalid_argument("file cannot be opened -- '" + outputFileName);
       sepDecomp.writeTo(outputFile);
-  } else if (algorithmName == "TTL-custom") {
+  } else if (algorithmName == "CTL-custom") {
 
       // Run the customization phase of CCH.
       std::ifstream sepFile(sepFileName, std::ios::binary);
@@ -495,27 +495,27 @@ inline void runPreprocessing(const CommandLineParser& clp) {
           throw std::invalid_argument("file cannot be opened -- '" + outputFileName + ".csv'");
       outputFile << "# Graph: " << graphFileName << '\n';
       outputFile << "# Separator: " << sepFileName << '\n';
-      outputFile << "cch_customization,ttl_customization,total_time\n";
+      outputFile << "cch_customization,ctl_customization,total_time\n";
 
       CCH cch;
       cch.preprocess(graph, decomp);
 
       BalancedTopologyCentricTreeHierarchy treeHierarchy;
       treeHierarchy.preprocess(graph, decomp);
-      using TTLLabelSet = std::conditional_t<TTL_SIMD_LOGK == 0,
+      using CTLLabelSet = std::conditional_t<CTL_SIMD_LOGK == 0,
       BasicLabelSet<0, ParentInfo::NO_PARENT_INFO>,
-              SimdLabelSet<TTL_SIMD_LOGK, ParentInfo::NO_PARENT_INFO>>;
-      using LabellingT = TruncatedTreeLabelling<TTLLabelSet>;
-      LabellingT ttl(treeHierarchy);
-        ttl.init();
+              SimdLabelSet<CTL_SIMD_LOGK, ParentInfo::NO_PARENT_INFO>>;
+      using LabellingT = TruncatedTreeLabelling<CTLLabelSet>;
+      LabellingT ctl(treeHierarchy);
+        ctl.init();
 
       Timer timer;
-      int cchCustom, ttlCustom, tot;
+      int cchCustom, ctlCustom, tot;
       for (auto i = 0; i < numCustomRuns; ++i) {
           {
               CCHMetric metric(cch, &graph.travelTime(0));
               timer.restart();
-              if constexpr (TTL_USE_PERFECT_CUSTOMIZATION) {
+              if constexpr (CTL_USE_PERFECT_CUSTOMIZATION) {
                   metric.buildMinimumWeightedCH();
               } else {
                   metric.customize();
@@ -523,17 +523,17 @@ inline void runPreprocessing(const CommandLineParser& clp) {
               cchCustom = timer.elapsed<std::chrono::microseconds>();
           }
           {
-              TTLMetric<LabellingT, TTL_USE_PERFECT_CUSTOMIZATION> metric(treeHierarchy, cch, &graph.travelTime(0));
+              CTLMetric<LabellingT, CTL_USE_PERFECT_CUSTOMIZATION> metric(treeHierarchy, cch, &graph.travelTime(0));
               timer.restart();
-              metric.buildCustomizedTTL(ttl);
+              metric.buildCustomizedCTL(ctl);
               tot = timer.elapsed<std::chrono::microseconds>();
           }
-          ttlCustom = tot - cchCustom;
-          outputFile << cchCustom << ',' << ttlCustom << ',' << tot << '\n';
+          ctlCustom = tot - cchCustom;
+          outputFile << cchCustom << ',' << ctlCustom << ',' << tot << '\n';
       }
-  } else if (algorithmName == "TTLSACCH-custom") {
+  } else if (algorithmName == "CTLSACCH-custom") {
 
-      // TTLSACCH can only deal with undirected graphs.
+      // CTLSACCH can only deal with undirected graphs.
       // Graph can be considered undirected if every edge exists both ways and has same travel time both ways.
       FORALL_VALID_EDGES(graph, u, e) {
               KASSERT(graph.template get<TravelTimeAttribute>(e) != TravelTimeAttribute::defaultValue());
@@ -542,12 +542,12 @@ inline void runPreprocessing(const CommandLineParser& clp) {
               KASSERT(graph.template get<TravelTimeAttribute>(e) == graph.template get<TravelTimeAttribute>(eBack));
           }
 
-        // Convert the input graph to TTLSA representation.
-        ttlsa::road_network::Graph ttlsaGraph;
-      ttlsaGraph.resize(graph.numVertices());
+        // Convert the input graph to CTLSA representation.
+        ctlsa::road_network::Graph ctlsaGraph;
+      ctlsaGraph.resize(graph.numVertices());
       FORALL_VALID_EDGES(graph, u, e) {
-              // TTLSA graph node IDs start at 1
-              ttlsaGraph.add_edge(u + 1, graph.edgeHead(e) + 1, graph.template get<TravelTimeAttribute>(e), false);
+              // CTLSA graph node IDs start at 1
+              ctlsaGraph.add_edge(u + 1, graph.edgeHead(e) + 1, graph.template get<TravelTimeAttribute>(e), false);
           }
 
 
@@ -560,21 +560,21 @@ inline void runPreprocessing(const CommandLineParser& clp) {
       outputFile << "setup,customization,total\n";
 
       // (Do not) contract degree 1 nodes
-      std::vector<ttlsa::road_network::Neighbor> closest;
-      ttlsaGraph.contract(closest, false);
+      std::vector<ctlsa::road_network::Neighbor> closest;
+      ctlsaGraph.contract(closest, false);
 
       // Build balanced tree hierarchy
-      std::vector<ttlsa::road_network::CutIndex> cutIndex;
+      std::vector<ctlsa::road_network::CutIndex> cutIndex;
       static constexpr double CUT_BALANCE = 0.2;
       static constexpr size_t LEAF_SIZE_THRESHOLD = 0; // CCH only works with THETA = 0.
-      ttlsaGraph.create_cut_index(cutIndex, CUT_BALANCE, LEAF_SIZE_THRESHOLD);
+      ctlsaGraph.create_cut_index(cutIndex, CUT_BALANCE, LEAF_SIZE_THRESHOLD);
 
       // Reset graph to original form before contractions
-      ttlsaGraph.reset();
+      ctlsaGraph.reset();
 
       // Initialize shortcut graph and labels
-      ttlsa::road_network::ContractionHierarchy ch;
-      ttlsaGraph.initialize(ch, cutIndex, closest);
+      ctlsa::road_network::ContractionHierarchy ch;
+      ctlsaGraph.initialize(ch, cutIndex, closest);
 
       Timer timer;
       int64_t customTime, setupTime;
@@ -583,11 +583,11 @@ inline void runPreprocessing(const CommandLineParser& clp) {
           timer.restart();
 
           // Customize CCH and HL with new metric on edges:
-          ttlsaGraph.reset(ch);
-          std::vector<ttlsa::road_network::Edge> edges;
-          ttlsaGraph.get_edges(edges);
+          ctlsaGraph.reset(ch);
+          std::vector<ctlsa::road_network::Edge> edges;
+          ctlsaGraph.get_edges(edges);
           for (auto &e: edges) {
-              // TTLSA graph node IDs start at 1
+              // CTLSA graph node IDs start at 1
               const auto tail = e.a - 1;
               const auto head = e.b - 1;
               const auto eInInputGraph = graph.uniqueEdgeBetween(tail, head);
@@ -598,14 +598,14 @@ inline void runPreprocessing(const CommandLineParser& clp) {
           setupTime = timer.elapsed<std::chrono::microseconds>();
             timer.restart();
 
-          ttlsaGraph.customise_shortcut_graph(ch, edges);
+          ctlsaGraph.customise_shortcut_graph(ch, edges);
 
           customTime = timer.elapsed<std::chrono::microseconds>();
           outputFile << setupTime << "," << customTime << "," << (setupTime + customTime) << '\n';
       }
-  } else if (algorithmName == "TTLSA-custom") {
+  } else if (algorithmName == "CTLSA-custom") {
 
-      // TTLSA can only deal with undirected graphs.
+      // CTLSA can only deal with undirected graphs.
       // Graph can be considered undirected if every edge exists both ways and has same travel time both ways.
       FORALL_VALID_EDGES(graph, u, e) {
               KASSERT(graph.template get<TravelTimeAttribute>(e) != TravelTimeAttribute::defaultValue());
@@ -614,12 +614,12 @@ inline void runPreprocessing(const CommandLineParser& clp) {
               KASSERT(graph.template get<TravelTimeAttribute>(e) == graph.template get<TravelTimeAttribute>(eBack));
           }
 
-      // Convert the input graph to TTLSA representation.
-      ttlsa::road_network::Graph ttlsaGraph;
-      ttlsaGraph.resize(graph.numVertices());
+      // Convert the input graph to CTLSA representation.
+      ctlsa::road_network::Graph ctlsaGraph;
+      ctlsaGraph.resize(graph.numVertices());
       FORALL_VALID_EDGES(graph, u, e) {
-              // TTLSA graph node IDs start at 1
-              ttlsaGraph.add_edge(u + 1, graph.edgeHead(e) + 1, graph.template get<TravelTimeAttribute>(e), false);
+              // CTLSA graph node IDs start at 1
+              ctlsaGraph.add_edge(u + 1, graph.edgeHead(e) + 1, graph.template get<TravelTimeAttribute>(e), false);
           }
 
       if (!endsWith(outputFileName, ".csv"))
@@ -628,43 +628,43 @@ inline void runPreprocessing(const CommandLineParser& clp) {
       if (!outputFile.good())
           throw std::invalid_argument("file cannot be opened -- '" + outputFileName + ".csv'");
       outputFile << "# Graph: " << graphFileName << '\n';
-      outputFile << "setup,cch_customization,ttlsa_customization,total\n";
+      outputFile << "setup,cch_customization,ctlsa_customization,total\n";
 
       std::cout << "Preprocessing..." << std::flush;
       // (Do not) contract degree 1 nodes
-      std::vector<ttlsa::road_network::Neighbor> closest;
-      ttlsaGraph.contract(closest, false);
+      std::vector<ctlsa::road_network::Neighbor> closest;
+      ctlsaGraph.contract(closest, false);
 
       // Build balanced tree hierarchy
-      std::vector<ttlsa::road_network::CutIndex> cutIndex;
+      std::vector<ctlsa::road_network::CutIndex> cutIndex;
       static constexpr double CUT_BALANCE = 0.2;
       static constexpr size_t LEAF_SIZE_THRESHOLD = 0;
-      ttlsaGraph.create_cut_index(cutIndex, CUT_BALANCE, LEAF_SIZE_THRESHOLD);
+      ctlsaGraph.create_cut_index(cutIndex, CUT_BALANCE, LEAF_SIZE_THRESHOLD);
 
       // Reset graph to original form before contractions
-      ttlsaGraph.reset();
+      ctlsaGraph.reset();
 
       // Initialize shortcut graph and labels
-      ttlsa::road_network::ContractionHierarchy ch;
-      ttlsaGraph.initialize(ch, cutIndex, closest);
-      ttlsa::road_network::ContractionIndex ci(cutIndex, closest);
+      ctlsa::road_network::ContractionHierarchy ch;
+      ctlsaGraph.initialize(ch, cutIndex, closest);
+      ctlsa::road_network::ContractionIndex ci(cutIndex, closest);
 
       std::cout << " done." << std::endl;
 
       std::cout << "Running customization " << numCustomRuns << " times... " << std::flush;
       Timer timer;
-      int64_t setupTime, cchCustomTime, ttlsaCustomTime;
+      int64_t setupTime, cchCustomTime, ctlsaCustomTime;
       ProgressBar progressBar(numCustomRuns);
       for (auto i = 0; i < numCustomRuns; ++i) {
 
           timer.restart();
 
           // Customize CCH and HL with new metric on edges:
-          ttlsaGraph.reset(ch, ci);
-          std::vector<ttlsa::road_network::Edge> edges;
-          ttlsaGraph.get_edges(edges);
+          ctlsaGraph.reset(ch, ci);
+          std::vector<ctlsa::road_network::Edge> edges;
+          ctlsaGraph.get_edges(edges);
           for (auto &e: edges) {
-              // TTLSA graph node IDs start at 1
+              // CTLSA graph node IDs start at 1
               const auto tail = e.a - 1;
               const auto head = e.b - 1;
               const auto eInInputGraph = graph.uniqueEdgeBetween(tail, head);
@@ -675,15 +675,15 @@ inline void runPreprocessing(const CommandLineParser& clp) {
           setupTime = timer.elapsed<std::chrono::microseconds>();
           timer.restart();
 
-          ttlsaGraph.customise_shortcut_graph(ch, ci, edges);
+          ctlsaGraph.customise_shortcut_graph(ch, ci, edges);
 
           cchCustomTime = timer.elapsed<std::chrono::microseconds>();
           timer.restart();
           
-          ttlsaGraph.customise_hub_labelling(ch, ci);
+          ctlsaGraph.customise_hub_labelling(ch, ci);
 
-          ttlsaCustomTime = timer.elapsed<std::chrono::microseconds>();
-          outputFile << setupTime << "," << cchCustomTime << "," << ttlsaCustomTime << "," << (setupTime + cchCustomTime + ttlsaCustomTime) << '\n';
+          ctlsaCustomTime = timer.elapsed<std::chrono::microseconds>();
+          outputFile << setupTime << "," << cchCustomTime << "," << ctlsaCustomTime << "," << (setupTime + cchCustomTime + ctlsaCustomTime) << '\n';
           ++progressBar;
       }
       progressBar.finish();
