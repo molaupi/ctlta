@@ -11,6 +11,8 @@ class CTLQuery {
     using BatchMask = LabelSet::LabelMask;
     using Batch = typename LabelSet::DistanceLabel;
 
+    static constexpr bool NoTruncatedVertices = BalancedTopologyCentricTreeHierarchy::NoTruncatedVertices;
+
     // Temporary label being constructed for truncated vertices.
     struct TemporaryLabel {
 
@@ -110,13 +112,17 @@ class CTLQuery {
         const LabellingT &ctl;
     };
 
-    using TruncatedVertexUpwardSearch = DagShortestPaths<SearchGraphT, BasicLabelSet<0, ParentInfo::FULL_PARENT_INFO>, PruneSearchAtUntruncatedVertices<true>>;
-    using TruncatedVertexDownwardSearch = DagShortestPaths<SearchGraphT, BasicLabelSet<0, ParentInfo::FULL_PARENT_INFO>, PruneSearchAtUntruncatedVertices<false>>;
+    struct MockSearch {
+        MockSearch(const SearchGraphT &, const int32_t *, const PruneSearchAtUntruncatedVertices<true> &) {}
+    };
+
+    using TruncatedVertexUpwardSearch = std::conditional_t<NoTruncatedVertices, MockSearch, DagShortestPaths<SearchGraphT, BasicLabelSet<0, ParentInfo::FULL_PARENT_INFO>, PruneSearchAtUntruncatedVertices<true>>>;
+    using TruncatedVertexDownwardSearch = std::conditional_t<NoTruncatedVertices, MockSearch, DagShortestPaths<SearchGraphT, BasicLabelSet<0, ParentInfo::FULL_PARENT_INFO>, PruneSearchAtUntruncatedVertices<false>>>;
+
+
 
 public:
 
-    // TODO: If Theta = 0, then we do not have to deal with truncated vertices at all, i.e., there's no need to
-    //  construct the searches in the constructor and we can simplify the run method at compile time.
     CTLQuery(const BalancedTopologyCentricTreeHierarchy &hierarchy,
              const SearchGraphT &upGraph,
              const SearchGraphT &downGraph,
@@ -124,11 +130,8 @@ public:
              int const *const downWeights,
              const LabellingT &ctl)
             : hierarchy(hierarchy), upGraph(upGraph), downGraph(downGraph), ctl(ctl),
-              buildUpLabelSearch(upGraph, upWeights,
-                                 {tempUpLabel, upTruncatedSearchSpace, hierarchy, ctl}),
-              buildDownLabelSearch(downGraph, downWeights,
-                                   {tempDownLabel, downTruncatedSearchSpace, hierarchy, ctl}) {
-    }
+              buildUpLabelSearch(upGraph, upWeights, {tempUpLabel, upTruncatedSearchSpace, hierarchy, ctl}),
+              buildDownLabelSearch(downGraph, downWeights, {tempDownLabel, downTruncatedSearchSpace, hierarchy, ctl}) {}
 
     // Expects ranks in the underlying separator decomposition order as inputs.
     void run(const int32_t s, const int32_t t) {
@@ -139,36 +142,42 @@ public:
         lastT = t;
         const auto lch = hierarchy.getLowestCommonHub(s, t);
 
-        if (!hierarchy.isVertexTruncated(s) && !hierarchy.isVertexTruncated(t)) {
+        if constexpr (NoTruncatedVertices) {
             const auto sUpLabel = ctl.cUpLabel(s);
             const auto tDownLabel = ctl.cDownLabel(t);
             computeMinDistanceInLabels(sUpLabel, tDownLabel, lch);
-        } else if (!hierarchy.isVertexTruncated(s)) {
-            const auto sUpLabel = ctl.cUpLabel(s);
-            buildTempDownLabel(t, lch);
-            computeMinDistanceInLabels(sUpLabel, tempDownLabel, lch);
-        } else if (!hierarchy.isVertexTruncated(t)) {
-            buildTempUpLabel(s, lch);
-            const auto tDownLabel = ctl.cDownLabel(t);
-            computeMinDistanceInLabels(tempUpLabel, tDownLabel, lch);
         } else {
-            buildTempUpLabel(s, lch);
-            buildTempDownLabel(t, lch);
-            computeMinDistanceInLabels(tempUpLabel, tempDownLabel, lch);
+            if (!hierarchy.isVertexTruncated(s) && !hierarchy.isVertexTruncated(t)) {
+                const auto sUpLabel = ctl.cUpLabel(s);
+                const auto tDownLabel = ctl.cDownLabel(t);
+                computeMinDistanceInLabels(sUpLabel, tDownLabel, lch);
+            } else if (!hierarchy.isVertexTruncated(s)) {
+                const auto sUpLabel = ctl.cUpLabel(s);
+                buildTempDownLabel(t, lch);
+                computeMinDistanceInLabels(sUpLabel, tempDownLabel, lch);
+            } else if (!hierarchy.isVertexTruncated(t)) {
+                buildTempUpLabel(s, lch);
+                const auto tDownLabel = ctl.cDownLabel(t);
+                computeMinDistanceInLabels(tempUpLabel, tDownLabel, lch);
+            } else {
+                buildTempUpLabel(s, lch);
+                buildTempDownLabel(t, lch);
+                computeMinDistanceInLabels(tempUpLabel, tempDownLabel, lch);
 
-            // If both s and t are truncated, they may be within the same truncated separator subtree, which we can
-            // check by comparing their number of hubs with the lch.
-            // In this case, their shortest distance may not use a vertex that is high enough in the hierarchy
-            // to be non-truncated. In this case, the shortest path is found using just the distances found during
-            // the two elimination tree searches in the CCH. We only have to consider the truncated vertices in
-            // the search space of the higher ranked vertex between s and t.
-            if (hierarchy.getNumHubs(s) == lch && hierarchy.getNumHubs(t) == lch) {
-                const auto &searchSpace = s > t ? upTruncatedSearchSpace : downTruncatedSearchSpace;
-                for (const auto &v: searchSpace) {
-                    const auto cchDist = buildUpLabelSearch.getDistance(v) + buildDownLabelSearch.getDistance(v);
-                    if (cchDist < lastDistance) {
-                        lastDistance = cchDist;
-                        minCCHDistMeetingVertex = v;
+                // If both s and t are truncated, they may be within the same truncated separator subtree, which we can
+                // check by comparing their number of hubs with the lch.
+                // In this case, their shortest distance may not use a vertex that is high enough in the hierarchy
+                // to be non-truncated. In this case, the shortest path is found using just the distances found during
+                // the two elimination tree searches in the CCH. We only have to consider the truncated vertices in
+                // the search space of the higher ranked vertex between s and t.
+                if (hierarchy.getNumHubs(s) == lch && hierarchy.getNumHubs(t) == lch) {
+                    const auto &searchSpace = s > t ? upTruncatedSearchSpace : downTruncatedSearchSpace;
+                    for (const auto &v: searchSpace) {
+                        const auto cchDist = buildUpLabelSearch.getDistance(v) + buildDownLabelSearch.getDistance(v);
+                        if (cchDist < lastDistance) {
+                            lastDistance = cchDist;
+                            minCCHDistMeetingVertex = v;
+                        }
                     }
                 }
             }
@@ -187,25 +196,32 @@ public:
     const std::vector<int32_t> &getUpEdgePath() {
         lastUpPath.clear();
 
-        // If the best distance was found using not labels but the CCH directly, return the path to the meeting
-        // vertex in the CCH:
-        if (minCCHDistMeetingVertex != INVALID_VERTEX) {
-            lastUpPath = buildUpLabelSearch.getReverseEdgePath(minCCHDistMeetingVertex);
-            return lastUpPath;
+        if constexpr (!NoTruncatedVertices) {
+            // If the best distance was found using not labels but the CCH directly, return the path to the meeting
+            // vertex in the CCH:
+            if (minCCHDistMeetingVertex != INVALID_VERTEX) {
+                lastUpPath = buildUpLabelSearch.getReverseEdgePath(minCCHDistMeetingVertex);
+                return lastUpPath;
+            }
         }
 
         int32_t v;
-        if (hierarchy.isVertexTruncated(lastS)) {
-            // If s was truncated, get path to access vertex, i.e., the first non-truncated vertex used on the up path,
-            // using parent pointers in topo search.
-            const auto accVertex = tempUpLabel.accessVertex(lastMeetingHubIdx);
-            lastUpPath = buildUpLabelSearch.getReverseEdgePath(accVertex);
-            std::reverse(lastUpPath.begin(), lastUpPath.end());
-            v = accVertex;
-        } else {
-            // If s was not truncated, the access vertex is simply s itself.
+        if constexpr (NoTruncatedVertices) {
             v = lastS;
+        } else {
+            if (hierarchy.isVertexTruncated(lastS)) {
+                // If s was truncated, get path to access vertex, i.e., the first non-truncated vertex used on the up path,
+                // using parent pointers in topo search.
+                const auto accVertex = tempUpLabel.accessVertex(lastMeetingHubIdx);
+                lastUpPath = buildUpLabelSearch.getReverseEdgePath(accVertex);
+                std::reverse(lastUpPath.begin(), lastUpPath.end());
+                v = accVertex;
+            } else {
+                // If s was not truncated, the access vertex is simply s itself.
+                v = lastS;
+            }
         }
+
 
         // Enumerate path from access vertex to meeting hub using path edges stored in labels.
         int32_t e;
@@ -224,23 +240,29 @@ public:
     const std::vector<int32_t> &getEdgesOnUpPathUnordered() {
         lastUpPath.clear();
 
-        // If the best distance was found using not labels but the CCH directly, return the path to the meeting
-        // vertex in the CCH:
-        if (minCCHDistMeetingVertex != INVALID_VERTEX) {
-            lastUpPath = buildUpLabelSearch.getReverseEdgePath(minCCHDistMeetingVertex);
-            return lastUpPath;
+        if constexpr (!NoTruncatedVertices) {
+            // If the best distance was found using not labels but the CCH directly, return the path to the meeting
+            // vertex in the CCH:
+            if (minCCHDistMeetingVertex != INVALID_VERTEX) {
+                lastUpPath = buildUpLabelSearch.getReverseEdgePath(minCCHDistMeetingVertex);
+                return lastUpPath;
+            }
         }
 
         int32_t v;
-        if (hierarchy.isVertexTruncated(lastS)) {
-            // If s was truncated, get path to access vertex, i.e., the first non-truncated vertex used on the up path,
-            // using parent pointers in topo search.
-            const auto accVertex = tempUpLabel.accessVertex(lastMeetingHubIdx);
-            lastUpPath = buildUpLabelSearch.getReverseEdgePath(accVertex);
-            v = accVertex;
-        } else {
-            // If s was not truncated, the access vertex is simply s itself.
+        if constexpr (NoTruncatedVertices) {
             v = lastS;
+        } else {
+            if (hierarchy.isVertexTruncated(lastS)) {
+                // If s was truncated, get path to access vertex, i.e., the first non-truncated vertex used on the up path,
+                // using parent pointers in topo search.
+                const auto accVertex = tempUpLabel.accessVertex(lastMeetingHubIdx);
+                lastUpPath = buildUpLabelSearch.getReverseEdgePath(accVertex);
+                v = accVertex;
+            } else {
+                // If s was not truncated, the access vertex is simply s itself.
+                v = lastS;
+            }
         }
 
         // Enumerate path from access vertex to meeting hub using path edges stored in labels.
@@ -258,24 +280,30 @@ public:
     const std::vector<int32_t> &getDownEdgePath() {
         lastDownPath.clear();
 
-        // If the best distance was found using not labels but the CCH directly, return the path to the meeting
-        // vertex in the CCH:
-        if (minCCHDistMeetingVertex != INVALID_VERTEX) {
-            lastDownPath = buildDownLabelSearch.getReverseEdgePath(minCCHDistMeetingVertex);
-            return lastDownPath;
+        if constexpr (!NoTruncatedVertices) {
+            // If the best distance was found using not labels but the CCH directly, return the path to the meeting
+            // vertex in the CCH:
+            if (minCCHDistMeetingVertex != INVALID_VERTEX) {
+                lastDownPath = buildDownLabelSearch.getReverseEdgePath(minCCHDistMeetingVertex);
+                return lastDownPath;
+            }
         }
 
         int32_t v;
-        if (hierarchy.isVertexTruncated(lastT)) {
-            // If t was truncated, get path to access vertex, i.e., the first non-truncated vertex used on the down path,
-            // using parent pointers in topo search.
-            const auto accVertex = tempDownLabel.accessVertex(lastMeetingHubIdx);
-            lastDownPath = buildDownLabelSearch.getReverseEdgePath(accVertex);
-            std::reverse(lastDownPath.begin(), lastDownPath.end());
-            v = accVertex;
-        } else {
-            // If t was not truncated, the access vertex is simply t itself.
+        if constexpr (NoTruncatedVertices) {
             v = lastT;
+        } else {
+            if (hierarchy.isVertexTruncated(lastT)) {
+                // If t was truncated, get path to access vertex, i.e., the first non-truncated vertex used on the down path,
+                // using parent pointers in topo search.
+                const auto accVertex = tempDownLabel.accessVertex(lastMeetingHubIdx);
+                lastDownPath = buildDownLabelSearch.getReverseEdgePath(accVertex);
+                std::reverse(lastDownPath.begin(), lastDownPath.end());
+                v = accVertex;
+            } else {
+                // If t was not truncated, the access vertex is simply t itself.
+                v = lastT;
+            }
         }
 
         // Enumerate path from access vertex to meeting hub using path edges stored in labels.
@@ -295,24 +323,31 @@ public:
     const std::vector<int32_t> &getEdgesOnDownPathUnordered() {
         lastDownPath.clear();
 
-        // If the best distance was found using not labels but the CCH directly, return the path to the meeting
-        // vertex in the CCH:
-        if (minCCHDistMeetingVertex != INVALID_VERTEX) {
-            lastDownPath = buildDownLabelSearch.getReverseEdgePath(minCCHDistMeetingVertex);
-            return lastDownPath;
+        if constexpr (!NoTruncatedVertices) {
+            // If the best distance was found using not labels but the CCH directly, return the path to the meeting
+            // vertex in the CCH:
+            if (minCCHDistMeetingVertex != INVALID_VERTEX) {
+                lastDownPath = buildDownLabelSearch.getReverseEdgePath(minCCHDistMeetingVertex);
+                return lastDownPath;
+            }
         }
 
         int32_t v;
-        if (hierarchy.isVertexTruncated(lastT)) {
-            // If t was truncated, get path to access vertex, i.e., the first non-truncated vertex used on the down path,
-            // using parent pointers in topo search.
-            const auto accVertex = tempDownLabel.accessVertex(lastMeetingHubIdx);
-            lastDownPath = buildDownLabelSearch.getReverseEdgePath(accVertex);
-            v = accVertex;
-        } else {
-            // If t was not truncated, the access vertex is simply t itself.
+        if constexpr (NoTruncatedVertices) {
             v = lastT;
+        } else {
+            if (hierarchy.isVertexTruncated(lastT)) {
+                // If t was truncated, get path to access vertex, i.e., the first non-truncated vertex used on the down path,
+                // using parent pointers in topo search.
+                const auto accVertex = tempDownLabel.accessVertex(lastMeetingHubIdx);
+                lastDownPath = buildDownLabelSearch.getReverseEdgePath(accVertex);
+                v = accVertex;
+            } else {
+                // If t was not truncated, the access vertex is simply t itself.
+                v = lastT;
+            }
         }
+
 
         // Enumerate path from access vertex to meeting hub using path edges stored in labels.
         int32_t e;

@@ -15,6 +15,8 @@ class BalancedTopologyCentricTreeHierarchy {
 
 public:
 
+    static constexpr bool NoTruncatedVertices = MaxTruncatedSubtreeSize == 0;
+
     BalancedTopologyCentricTreeHierarchy() = default;
 
     // Builds the metric-independent CCH for the specified graph and separator decomposition.
