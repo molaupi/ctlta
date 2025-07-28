@@ -65,7 +65,7 @@ public:
             auto maxChange = 0.0;
             auto numPairsSampledBefore = 0;
 
-#pragma omp for schedule(dynamic, 64) nowait
+#pragma omp for schedule(dynamic, 4096 / K) nowait
             for (auto i = 0; i < odPairs.size(); i += K * skipInterval) {
                 // Run multiple shortest-path computations simultaneously.
                 std::array<int, K> sources;

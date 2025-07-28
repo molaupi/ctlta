@@ -20,7 +20,7 @@ public:
 
     struct ConstBatchLabel {
 
-        ConstBatchLabel(Batch const *startOfLabel, uint32_t numHubs)
+        ConstBatchLabel(Batch const * const startOfLabel, const uint32_t numHubs)
                 : startOfLabel(startOfLabel), numHubs(numHubs), numBatches(numHubs / K + (numHubs % K != 0)) {}
 
         int32_t dist(const uint32_t &hubIdx) const {
@@ -45,9 +45,9 @@ public:
             return startOfLabel[numBatches + batchIdx];
         }
 
-        Batch const *startOfLabel;
-        uint32_t numHubs;
-        uint32_t numBatches;
+        Batch const * const startOfLabel;
+        const uint32_t numHubs;
+        const uint32_t numBatches;
     };
 
     struct BatchLabel {

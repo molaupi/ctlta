@@ -114,6 +114,9 @@ class CTLQuery {
     using TruncatedVertexDownwardSearch = DagShortestPaths<SearchGraphT, BasicLabelSet<0, ParentInfo::FULL_PARENT_INFO>, PruneSearchAtUntruncatedVertices<false>>;
 
 public:
+
+    // TODO: If Theta = 0, then we do not have to deal with truncated vertices at all, i.e., there's no need to
+    //  construct the searches in the constructor and we can simplify the run method at compile time.
     CTLQuery(const BalancedTopologyCentricTreeHierarchy &hierarchy,
              const SearchGraphT &upGraph,
              const SearchGraphT &downGraph,
@@ -137,16 +140,16 @@ public:
         const auto lch = hierarchy.getLowestCommonHub(s, t);
 
         if (!hierarchy.isVertexTruncated(s) && !hierarchy.isVertexTruncated(t)) {
-            const auto sUpLabel = ctl.upLabel(s);
-            const auto tDownLabel = ctl.downLabel(t);
+            const auto sUpLabel = ctl.cUpLabel(s);
+            const auto tDownLabel = ctl.cDownLabel(t);
             computeMinDistanceInLabels(sUpLabel, tDownLabel, lch);
         } else if (!hierarchy.isVertexTruncated(s)) {
-            const auto sUpLabel = ctl.upLabel(s);
+            const auto sUpLabel = ctl.cUpLabel(s);
             buildTempDownLabel(t, lch);
             computeMinDistanceInLabels(sUpLabel, tempDownLabel, lch);
         } else if (!hierarchy.isVertexTruncated(t)) {
             buildTempUpLabel(s, lch);
-            const auto tDownLabel = ctl.downLabel(t);
+            const auto tDownLabel = ctl.cDownLabel(t);
             computeMinDistanceInLabels(tempUpLabel, tDownLabel, lch);
         } else {
             buildTempUpLabel(s, lch);
