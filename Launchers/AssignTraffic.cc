@@ -170,7 +170,9 @@ inline void assignTraffic(const CommandLineParser& clp) {
   const auto findSO = clp.isSet("so");
   const auto useLengths = clp.isSet("l");
   const auto outputIntermediates = clp.isSet("i");
-  const auto verbose = clp.isSet("v");
+  auto verbose = clp.isSet("v");
+  const auto veryVerbose = clp.isSet("vv");
+  if (veryVerbose) verbose = true; // If very verbose, also verbose.
   const auto analysisPeriod = clp.getValue<double>("p", 0);
   const auto traversalCostFunction = clp.getValue<std::string>("f", "BPR");
   const auto shortestPathAlgorithm = clp.getValue<std::string>("a", "CCH");
@@ -279,7 +281,7 @@ inline void assignTraffic(const CommandLineParser& clp) {
     statFile << "# Period of analysis: " << analysisPeriod << "\n";
     statFile << std::flush;
   }
-  FWAssignmentT fwAssignment(graph, odPairs, verbose);
+  FWAssignmentT fwAssignment(graph, odPairs, verbose, veryVerbose);
   if (statFile.is_open()) {
     statFile << "# Preprocessing time: " << fwAssignment.stats.totalRunningTime << "ms\n";
     statFile << "iteration,customization_time,query_time,line_search_time,total_time,";

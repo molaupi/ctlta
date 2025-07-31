@@ -29,12 +29,14 @@ public:
     // Constructs an all-or-nothing assignment instance.
     AllOrNothingAssignment(const InputGraph &graph,
                            const std::vector<ClusteredOriginDestination> &odPairs,
-                           const bool verbose = true)
+                           const bool verbose = true,
+                           const bool veryVerbose = false)
             : stats(odPairs.size()),
               shortestPathAlgo(graph),
               inputGraph(graph),
               odPairs(odPairs),
-              verbose(verbose) {
+              verbose(verbose),
+              veryVerbose(veryVerbose) {
         Timer timer;
         shortestPathAlgo.preprocess();
         stats.totalPreprocessingTime = timer.elapsed();
@@ -52,7 +54,7 @@ public:
         stats.lastCustomizationTime = timer.elapsed();
 
         timer.restart();
-        ProgressBar bar(std::ceil(1.0 * odPairs.size() / (K * skipInterval)), verbose);
+        ProgressBar bar(std::ceil(1.0 * odPairs.size() / (K * skipInterval)), veryVerbose);
         trafficFlows.assign(inputGraph.numEdges(), 0);
         stats.startIteration();
         auto totalNumPairsSampledBefore = 0;
@@ -143,4 +145,5 @@ private:
     const ODPairs &odPairs;             // The OD pairs to be assigned onto the graph.
     AlignedVector<int> trafficFlows;    // The traffic flows on the edges.
     const bool verbose;                 // Should informative messages be displayed?
+    const bool veryVerbose;                      // Should information on progress of each iteration be displayed?
 };

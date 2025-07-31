@@ -30,14 +30,15 @@ class FrankWolfeAssignment {
 
   // Constructs an assignment procedure based on the Frank-Wolfe method.
   FrankWolfeAssignment(Graph& graph, const std::vector<ClusteredOriginDestination>& odPairs,
-                       const bool verbose = true)
-      : aonAssignment(graph, odPairs, verbose),
+                       const bool verbose = true, const bool veryVerbose = false)
+      : aonAssignment(graph, odPairs, verbose, veryVerbose),
         graph(graph),
         trafficFlows(graph.numEdges()),
         pointOfSight(graph.numEdges()),
         traversalCostFunction(graph),
         objFunction(traversalCostFunction),
-        verbose(verbose) {
+        verbose(verbose),
+        veryVerbose(veryVerbose) {
     assert(graph.isDefrag());
     stats.totalRunningTime = aonAssignment.stats.totalRoutingTime;
   }
@@ -249,6 +250,7 @@ class FrankWolfeAssignment {
   TraversalCostFunction traversalCostFunction; // A functor returning the traversal cost of an edge.
   ObjFunction objFunction;                     // The objective function to be minimized (UE or SO).
   const bool verbose;                          // Should informative messages be displayed?
+  const bool veryVerbose;                      // Should information on progress of each iteration be displayed?
 };
 
 // An alias template for a user-equilibrium (UE) traffic assignment.
