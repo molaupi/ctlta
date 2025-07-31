@@ -25,6 +25,7 @@ add_executable(AssignTraffic AssignTraffic.cc)
 target_compile_definitions(AssignTraffic PRIVATE CSV_IO_NO_THREAD)
 target_compile_options(AssignTraffic PRIVATE ${FULL_WARNINGS})
 # target_include_directories(AssignTraffic PRIVATE ${Boost_INCLUDE_DIR})
+# TODO: use routingkit static library for faster preprocessing in AssignTraffic?
 target_link_libraries(AssignTraffic Boost::boost routingkit kassert vectorclass fast_cpp_csv_parser)
 target_link_libraries(AssignTraffic ctlsa) # external CTL standalone implementation
 
@@ -55,22 +56,6 @@ target_compile_definitions(AssignTraffic PRIVATE CTL_SIMD_LOGK=${VAL_CTL_SIMD_LO
 target_compile_definitions(AssignTraffic PRIVATE CTL_USE_PERFECT_CUSTOMIZATION=${VAL_CTL_USE_PERFECT_CUSTOMIZATION})
 #target_compile_definitions(AssignTraffic PRIVATE CTL_STORE_PATH_POINTERS=${VAL_CTL_STORE_PATH_POINTERS})
 
-
-# CalculateDemand target
-add_executable(
-    CalculateDemand CalculateDemand.cc
-    ../External/randomc/mersenne.cpp ../External/randomc/userintf.cpp ../External/stocc/stoc1.cpp)
-target_compile_definitions(CalculateDemand PRIVATE CSV_IO_NO_THREAD)
-target_link_libraries(CalculateDemand ${PROJ_LIBRARY} ${RoutingKit_LIBRARY})
-if(OpenMP_FOUND)
-  target_link_libraries(CalculateDemand OpenMP::OpenMP_CXX)
-endif()
-
-set(DC_MAX_NUM_SOURCES "" CACHE STRING "Choose the number of sources to be substituted in FRAD.")
-if(NOT DC_MAX_NUM_SOURCES STREQUAL "")
-  target_compile_definitions(CalculateDemand PRIVATE DC_MAX_NUM_SOURCES=${DC_MAX_NUM_SOURCES})
-endif()
-
 # RunP2PAlgo target
 add_executable(RunP2PAlgo RunP2PAlgo.cc)
 target_compile_definitions(RunP2PAlgo PRIVATE CSV_IO_NO_THREAD)
@@ -88,11 +73,4 @@ endif()
 option(USE_FAST_ELIMINATION_TREE_QUERY "Use the fast elimination tree query." ON)
 if(NOT USE_FAST_ELIMINATION_TREE_QUERY)
   target_compile_definitions(RunP2PAlgo PRIVATE NO_FAST_ELIMINATION_TREE_QUERY)
-endif()
-
-# RunPoiAlgo target
-add_executable(RunPoiAlgo RunPoiAlgo.cc)
-target_link_libraries(RunPoiAlgo ${RoutingKit_LIBRARY})
-if(OpenMP_FOUND)
-  target_link_libraries(RunPoiAlgo OpenMP::OpenMP_CXX)
 endif()

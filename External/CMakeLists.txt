@@ -43,8 +43,4 @@ target_include_directories(rapidxml SYSTEM INTERFACE rapidxml)
 add_library(randomc INTERFACE)
 target_include_directories(randomc SYSTEM INTERFACE randomc)
 
-# Add bundled stocc header only library as interface target
-add_library(stocc INTERFACE)
-target_include_directories(stocc SYSTEM INTERFACE stocc)
-
 add_subdirectory(ctlsa)

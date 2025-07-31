@@ -526,7 +526,7 @@ public:
     void initialize(ContractionHierarchy &ch, std::vector<CutIndex> &ci, std::vector<Neighbor> &closest) const;
 
     void customise_shortcut_graph(ContractionHierarchy &ch, ContractionIndex &tcl, std::vector<Edge> &edges) const;
-    void customise_shortcut_graph(ContractionHierarchy &ch, std::vector<Edge> &edges) const;
+//    void customise_shortcut_graph(ContractionHierarchy &ch, std::vector<Edge> &edges) const;
     void customise_hub_labelling(ContractionHierarchy &ch, ContractionIndex &tcl) const;
 
         void reset(ContractionHierarchy &ch) const;

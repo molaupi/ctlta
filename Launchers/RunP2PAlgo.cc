@@ -532,77 +532,78 @@ inline void runPreprocessing(const CommandLineParser& clp) {
           outputFile << cchCustom << ',' << ctlCustom << ',' << tot << '\n';
       }
   } else if (algorithmName == "CTLSACCH-custom") {
-
-      // CTLSACCH can only deal with undirected graphs.
-      // Graph can be considered undirected if every edge exists both ways and has same travel time both ways.
-      FORALL_VALID_EDGES(graph, u, e) {
-              KASSERT(graph.template get<TravelTimeAttribute>(e) != TravelTimeAttribute::defaultValue());
-              const auto eBack = graph.uniqueEdgeBetween(graph.edgeHead(e), u);
-              KASSERT(eBack >= 0 && eBack < graph.numEdges());
-              KASSERT(graph.template get<TravelTimeAttribute>(e) == graph.template get<TravelTimeAttribute>(eBack));
-          }
-
-        // Convert the input graph to CTLSA representation.
-        ctlsa::road_network::Graph ctlsaGraph;
-      ctlsaGraph.resize(graph.numVertices());
-      FORALL_VALID_EDGES(graph, u, e) {
-              // CTLSA graph node IDs start at 1
-              ctlsaGraph.add_edge(u + 1, graph.edgeHead(e) + 1, graph.template get<TravelTimeAttribute>(e), false);
-          }
-
-
-      if (!endsWith(outputFileName, ".csv"))
-          outputFileName += ".csv";
-      std::ofstream outputFile(outputFileName);
-      if (!outputFile.good())
-          throw std::invalid_argument("file cannot be opened -- '" + outputFileName + ".csv'");
-      outputFile << "# Graph: " << graphFileName << '\n';
-      outputFile << "setup,customization,total\n";
-
-      // (Do not) contract degree 1 nodes
-      std::vector<ctlsa::road_network::Neighbor> closest;
-      ctlsaGraph.contract(closest, false);
-
-      // Build balanced tree hierarchy
-      std::vector<ctlsa::road_network::CutIndex> cutIndex;
-      static constexpr double CUT_BALANCE = 0.2;
-      static constexpr size_t LEAF_SIZE_THRESHOLD = 0; // CCH only works with THETA = 0.
-      ctlsaGraph.create_cut_index(cutIndex, CUT_BALANCE, LEAF_SIZE_THRESHOLD);
-
-      // Reset graph to original form before contractions
-      ctlsaGraph.reset();
-
-      // Initialize shortcut graph and labels
-      ctlsa::road_network::ContractionHierarchy ch;
-      ctlsaGraph.initialize(ch, cutIndex, closest);
-
-      Timer timer;
-      int64_t customTime, setupTime;
-      for (auto i = 0; i < numCustomRuns; ++i) {
-
-          timer.restart();
-
-          // Customize CCH and HL with new metric on edges:
-          ctlsaGraph.reset(ch);
-          std::vector<ctlsa::road_network::Edge> edges;
-          ctlsaGraph.get_edges(edges);
-          for (auto &e: edges) {
-              // CTLSA graph node IDs start at 1
-              const auto tail = e.a - 1;
-              const auto head = e.b - 1;
-              const auto eInInputGraph = graph.uniqueEdgeBetween(tail, head);
-              KASSERT(eInInputGraph >= 0 && eInInputGraph < graph.numEdges());
-              e.d = graph.travelTime(eInInputGraph);
-          }
-
-          setupTime = timer.elapsed<std::chrono::microseconds>();
-            timer.restart();
-
-          ctlsaGraph.customise_shortcut_graph(ch, edges);
-
-          customTime = timer.elapsed<std::chrono::microseconds>();
-          outputFile << setupTime << "," << customTime << "," << (setupTime + customTime) << '\n';
-      }
+        // TODO: Allow using CCH from CTLSA again.
+      throw std::invalid_argument("CTLSACCH-custom is not supported at the moment.");
+//      // CTLSACCH can only deal with undirected graphs.
+//      // Graph can be considered undirected if every edge exists both ways and has same travel time both ways.
+//      FORALL_VALID_EDGES(graph, u, e) {
+//              KASSERT(graph.template get<TravelTimeAttribute>(e) != TravelTimeAttribute::defaultValue());
+//              const auto eBack = graph.uniqueEdgeBetween(graph.edgeHead(e), u);
+//              KASSERT(eBack >= 0 && eBack < graph.numEdges());
+//              KASSERT(graph.template get<TravelTimeAttribute>(e) == graph.template get<TravelTimeAttribute>(eBack));
+//          }
+//
+//        // Convert the input graph to CTLSA representation.
+//        ctlsa::road_network::Graph ctlsaGraph;
+//      ctlsaGraph.resize(graph.numVertices());
+//      FORALL_VALID_EDGES(graph, u, e) {
+//              // CTLSA graph node IDs start at 1
+//              ctlsaGraph.add_edge(u + 1, graph.edgeHead(e) + 1, graph.template get<TravelTimeAttribute>(e), false);
+//          }
+//
+//
+//      if (!endsWith(outputFileName, ".csv"))
+//          outputFileName += ".csv";
+//      std::ofstream outputFile(outputFileName);
+//      if (!outputFile.good())
+//          throw std::invalid_argument("file cannot be opened -- '" + outputFileName + ".csv'");
+//      outputFile << "# Graph: " << graphFileName << '\n';
+//      outputFile << "setup,customization,total\n";
+//
+//      // (Do not) contract degree 1 nodes
+//      std::vector<ctlsa::road_network::Neighbor> closest;
+//      ctlsaGraph.contract(closest, false);
+//
+//      // Build balanced tree hierarchy
+//      std::vector<ctlsa::road_network::CutIndex> cutIndex;
+//      static constexpr double CUT_BALANCE = 0.2;
+//      static constexpr size_t LEAF_SIZE_THRESHOLD = 0; // CCH only works with THETA = 0.
+//      ctlsaGraph.create_cut_index(cutIndex, CUT_BALANCE, LEAF_SIZE_THRESHOLD);
+//
+//      // Reset graph to original form before contractions
+//      ctlsaGraph.reset();
+//
+//      // Initialize shortcut graph and labels
+//      ctlsa::road_network::ContractionHierarchy ch;
+//      ctlsaGraph.initialize(ch, cutIndex, closest);
+//
+//      Timer timer;
+//      int64_t customTime, setupTime;
+//      for (auto i = 0; i < numCustomRuns; ++i) {
+//
+//          timer.restart();
+//
+//          // Customize CCH and HL with new metric on edges:
+//          ctlsaGraph.reset(ch);
+//          std::vector<ctlsa::road_network::Edge> edges;
+//          ctlsaGraph.get_edges(edges);
+//          for (auto &e: edges) {
+//              // CTLSA graph node IDs start at 1
+//              const auto tail = e.a - 1;
+//              const auto head = e.b - 1;
+//              const auto eInInputGraph = graph.uniqueEdgeBetween(tail, head);
+//              KASSERT(eInInputGraph >= 0 && eInInputGraph < graph.numEdges());
+//              e.d = graph.travelTime(eInInputGraph);
+//          }
+//
+//          setupTime = timer.elapsed<std::chrono::microseconds>();
+//            timer.restart();
+//
+//          ctlsaGraph.customise_shortcut_graph(ch, edges);
+//
+//          customTime = timer.elapsed<std::chrono::microseconds>();
+//          outputFile << setupTime << "," << customTime << "," << (setupTime + customTime) << '\n';
+//      }
   } else if (algorithmName == "CTLSA-custom") {
 
       // CTLSA can only deal with undirected graphs.

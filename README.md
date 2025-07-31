@@ -1,12 +1,23 @@
-# Routing Framework
+# Traffic Assignment Framework with (Customizable) Contraction Hierarchies and Customizable Tree Labeling
+
+This repository contains C++20 code for a traffic assignment framework and optimized 
+point-to-point routing algorithms based on state-of-the-art customizable shortest-path algorithms.
+
+The framework and implementation of all shortest-path algorithms except CTL are a fork 
+of https://github.com/vbuchhold/routing-framework.
+Central ideas for the framework and the usage of CCHs in TA are described in the paper
+* [1] Valentin Buchhold, Peter Sanders, and Dorothea Wagner. Real-time Traffic Assignment Using
+Engineered Customizable Contraction Hierarchies. ACM Journal of Experimental Algorithmics,
+24(2):2.4:1-2.4:28, 2019. [doi:10.1145/3362693](http://dx.doi.org/10.1145/3362693).
+
+The CTL algorithm is based on the paper
+* [2] Muhammad Farhan, et al. Customization Meets 2-Hop Labeling: Efficient Routing in Road Networks. 
+To be published in Proceedings of the VLDB Volume 18 (for VLDB 2025), 2025.
 
 ## License
 
 All files in this repository except the files in the directory `External` are licensed under the MIT
-license. External libraries are licensed under their respective licenses. Note that the compiled
-programs `CalculateDemand` and `ComputeUnionBoundary` use libraries that are released under the GNU
-GPLv3, and thus the compiled programs `CalculateDemand` and `ComputeUnionBoundary` have to be under
-the GNU GPLv3.
+license. External libraries are licensed under their respective licenses. 
 
 ## Prerequisites
 
@@ -16,7 +27,7 @@ To build the framework, you need to have some tools and libraries installed. On 
 ```
 $ sudo apt-get install build-essential
 $ sudo apt-get install cmake
-$ sudo apt-get install python3 python3-pip; pip3 install -r python_requirements.txt
+$ sudo apt-get install libboost-all-dev
 $ sudo apt-get install sqlite3 libsqlite3-dev
 $ sudo apt-get install zlib1g-dev
 ```
@@ -35,61 +46,33 @@ Once you installed the packages, type the following commands at the top-level di
 the framework:
 
 ```
-$ cmake -S . -B Build/Release_<theta> -DCMAKE_BUILD_TYPE=Release -DCTL_THETA=<theta>
-$ cmake --build Build/Release_<theta> --target AssignTraffic
+$ cmake -S . -B Build/Release -DCMAKE_BUILD_TYPE=Release [-D<option>=<value> ...]
+$ cmake --build Build/Release --target AssignTraffic
 ```
 
-This builds an executable `AssignTraffic` using a theta value of
-`<theta>` at `Build/Release_<theta>/Launchers/AssignTraffic`.
-Replace `<theta>` with the desired theta value. 
-Run the two commands multiple times for multiple `AssignTraffic` executables with 
-different theta values in different directories. 
+This builds an executable `AssignTraffic` at `Build/Release/Launchers/AssignTraffic`.
+
+There are a number of additional options for routing algorithms that can be passed as CMake parameters:
+
+| Option                          | Possible Values | Default value | Description                                                                                                                                                                                                          |
+|---------------------------------|-----------------|---------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `NUM_THREADS`                   | integer         | 1             | Number of threads to use for parallelization of customization and queries in TA. Default is 1.                                                                                                                       |
+| `TA_LOG_K`                      | integer         | 0             | Number of simultaneous shortest-path computations using centralized queries (see [1]).                                                                                                                               |
+| `TA_USE_SIMD_SEARCH`            | ON / OFF        | ON            | If set, may use SIMD instructions for centralized shortest-path queries. Only has an effect if `TA_LOG_K` >= 2.                                                                                                      |
+| `CTL_THETA`                     | integer         | 0             | Set parameter 'theta', i.e., maximum size of truncated subtrees, of the CTL algorithm (see [2]). Set to 0 for no truncation.                                                                                         | 
+| `CTL_SIMD_LOGK`                 | integer         | 0             | Given value L, the CTL algorithm uses distance labels of width 2^L in the labelling, possibly employing SIMD instructions during customization and queries. SIMD instructions are used only if `CTL_SIMD_LOGK` >= 2. |
+| `CTL_USE_PERFECT_CUSTOMIZATION` | ON / OFF        | OFF           | If set, use perfect customization in CCH on which CTL is based. Default is 'OFF'.                                                                                                                                    |
+
 
 ## Running Traffic Assignment
 
 The `AssignTraffic` executable takes input arguments as outlined at the top of 
 the file `Launchers/AssignTraffic.cc`.
-For example, for `Stuttgart-morn-undirected`, use:
 
-```
-$ Build/Release_<theta>/Launchers/AssignTraffic -v -p 1 -n 50 -a CTLSA \
-    -g <path>/Inputs/Graphs/Visum_Stuttgart_undirected.gr.bin
-    -d <path>/Inputs/ODPairs/Visum_Stuttgart_morn_undirected.csv
-    -flow <path>/Outputs/Stuttgart_morn_undirected/flow_CTLSA_TH<theta> \
-    -dist <path>/Outputs/Stuttgart_morn_undirected/dist_CTLSA_TH<theta> \
-    -stat <path>/Outputs/Stuttgart_morn_undirected/stat_CTLSA_TH<theta>
-```
+The central inputs are a road network in the binary representation of this framework,
+and a set of origin-destination (O-D) pairs in a CSV file.
 
-The argument `-v` makes the executable print out statistics for every 
-iteration to standard out.
-
-The argument `-p` sets the observation period in hours. It should be set to 1 
-for `morn` and `even`, to 24 for `day` and to 168 for `week`.
-
-The argument `-n` specifies the number of iterations to run.
-
-The argument `-a` specifies the algorithm. CTLSA stands for CTL standalone, 
-which is your implementation of CTL. It is run with the theta value specified 
-earlier when building. 
-If you want to run TA with your CCH implementation use `-a CTLSACCH`. 
-The theta value doesn't matter for this, obviously. 
-
-The argument `-g` is a path to the road network in the binary representation 
-of this framework. You should already have received the Stuttgart graphs in this 
-format. If you need to convert from DIMACS to this format, take a look at 
-`RawData/ConvertGraph.cc` (or ask me).
-
-The `-d` argument specifies a path to the O-D pairs as a CSV file with a column called 
-origin and a column called destination containing the vertex IDs of the 
-origins and destinations, respectively. You should have received the Stuttgart 
-demand sets.
-
-The `-flow`, `-dist`, and `-stat` arguments specify paths to the three output 
-files in CSV format. 
-The flow output file contains the flow on each edge after the first 
-and after the last iteration.
-The dist output file contains the travel cost for each O-D pair in the first
-and in the last iteration.
-The stat output file contains statistics on the runtime of each iteration 
-in milliseconds. You'll be interested in the `query_time` and 
-`customization_time` columns.
+Unfortunately, the input data from the papers mentioned above is not publicly available.
+However, we provide scripts to utilize your own input data.
+For the road network, consider converting from other formats using the `ConvertGraph` tool in the `RawData` directory.
+To map a set of O-D pairs onto a road network in the format of this framework, you can use the `RawData/TransformLocations` tool.

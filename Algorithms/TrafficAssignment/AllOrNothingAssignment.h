@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "DataStructures/Utilities/OriginDestination.h"
-#include "Stats/TrafficAssignment/AllOrNothingAssignmentStats.h"
+#include "AllOrNothingAssignmentStats.h"
 #include "Tools/CommandLine/ProgressBar.h"
 #include "Tools/Simd/AlignedVector.h"
 #include "Tools/Timer.h"

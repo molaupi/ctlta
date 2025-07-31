@@ -13,7 +13,7 @@
 #include "DataStructures/Graph/Attributes/TraversalCostAttribute.h"
 #include "DataStructures/Graph/Graph.h"
 #include "DataStructures/Utilities/OriginDestination.h"
-#include "Stats/TrafficAssignment/FrankWolfeAssignmentStats.h"
+#include "FrankWolfeAssignmentStats.h"
 #include "Tools/Math.h"
 #include "Tools/Timer.h"
 

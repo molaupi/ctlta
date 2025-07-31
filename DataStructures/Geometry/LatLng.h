@@ -15,6 +15,7 @@ class LatLng {
  public:
   // Latitude and longitude are stored internally as integers in units of 1/PRECISION degrees.
   static constexpr int PRECISION = 1000000;
+    static const int LOG_10_PRECISION = static_cast<int>(std::round(std::log10(PRECISION)));
   static constexpr int DEG_90 = 90 * PRECISION;
   static constexpr int DEG_180 = 180 * PRECISION;
   static constexpr int DEG_360 = 360 * PRECISION;
@@ -142,4 +143,11 @@ inline LatLng operator-(const LatLng& lhs, const LatLng& rhs) {
 inline std::ostream& operator<<(std::ostream& os, const LatLng& latLng) {
   os << "(" << latLng.latitude() << ", " << latLng.longitude() << ")";
   return os;
+}
+
+inline std::string latLngForCsv(const LatLng &latLng) {
+    std::stringstream out;
+    out.precision(LatLng::LOG_10_PRECISION + 2);
+    out << "(" << latLng.latInDeg() << "|" << latLng.lngInDeg() << ")";
+    return out.str();
 }
