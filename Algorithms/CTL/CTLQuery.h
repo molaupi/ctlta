@@ -190,6 +190,10 @@ public:
         return lastDistance;
     }
 
+    int32_t getLastMeetingHubIdx() const {
+        return lastMeetingHubIdx;
+    }
+
     // Returns the CCH edges in the upward graph on the up segment of the up-down path (in reverse order to conform to
     // default orientation in graph-traversal-based searches).
     template<bool hasPathEdges = LabelSet::KEEP_PARENT_EDGES, std::enable_if_t<hasPathEdges, bool> = true>
@@ -415,8 +419,15 @@ private:
 
         const auto minInBlocks = dMin.horizontalMin();
         lastDistance = minInBlocks;
-        const auto idxWithinBlock = firstSet(dMin == minInBlocks);
-        lastMeetingHubIdx = minBlock[idxWithinBlock] * K + idxWithinBlock;
+
+        // Find out the meeting hub idx which is based on the smallest block index among any blocks that have the
+        // minimum distance
+        minBlock = select(minInBlocks == dMin, minBlock, Batch(numFullBlocks + 1));
+        const int minMinBlock = minBlock.horizontalMin();
+        const int idx = firstSet(minBlock == minMinBlock);
+        lastMeetingHubIdx = minMinBlock * K + idx;
+//        const auto idxWithinBlock = firstSet(dMin == minInBlocks);
+//        lastMeetingHubIdx = minBlock[idxWithinBlock] * K + idxWithinBlock;
     }
 
     const BalancedTopologyCentricTreeHierarchy &hierarchy;
