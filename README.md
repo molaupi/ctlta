@@ -40,7 +40,9 @@ $ git submodule update --init
 $ make -C External/RoutingKit lib/libroutingkit.so
 ```
 
-## Building
+## Traffic Assignment
+
+### Building Traffic Assignment
 
 Once you installed the packages, type the following commands at the top-level directory of
 the framework:
@@ -64,7 +66,7 @@ There are a number of additional options for routing algorithms that can be pass
 | `CTL_USE_PERFECT_CUSTOMIZATION` | ON / OFF        | OFF           | If set, use perfect customization in CCH on which CTL is based. Default is 'OFF'.                                                                                                                                    |
 
 
-## Running Traffic Assignment
+### Running Traffic Assignment
 
 The `AssignTraffic` executable takes input arguments as outlined at the top of 
 the file `Launchers/AssignTraffic.cc`.
@@ -76,3 +78,48 @@ Unfortunately, the input data from the papers mentioned above is not publicly av
 However, we provide scripts to utilize your own input data.
 For the road network, consider converting from other formats using the `ConvertGraph` tool in the `RawData` directory.
 To map a set of O-D pairs onto a road network in the format of this framework, you can use the `RawData/TransformLocations` tool.
+
+## Point-to-Point Shortest-Path Queries
+
+### Building Point-to-Point Shortest-Path Queries
+The framework also provides a launcher for point-to-point shortest-path queries based on the routing algorithms 
+implemented. 
+Use this launcher to compare the preprocessing, customization, and query performance of the different routing algorithms.
+To build the launcher, type the following commands at the top-level directory of the framework:
+
+```
+$ cmake -S . -B Build/Release -DCMAKE_BUILD_TYPE=Release [-D<option>=<value> ...]
+$ cmake --build Build/Release --target RunP2PAlgo
+```
+
+This builds an executable `RunP2PAlgo` at `Build/Release/Launchers/AssignTraffic`.
+
+There are a number of additional options for routing algorithms that can be passed as CMake parameters:
+
+| Option                          | Possible Values | Default value | Description                                                                                                                                                                                                          |
+|---------------------------------|-----------------|---------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `NUM_THREADS`                   | integer         | 1             | Number of threads to use for parallelization of customization. (Queries are run sequentially.) Default is 1.                                                                                                         |
+| `CTL_THETA`                     | integer         | 0             | Set parameter 'theta', i.e., maximum size of truncated subtrees, of the CTL algorithm (see [2]). Set to 0 for no truncation.                                                                                         | 
+| `CTL_SIMD_LOGK`                 | integer         | 0             | Given value L, the CTL algorithm uses distance labels of width 2^L in the labelling, possibly employing SIMD instructions during customization and queries. SIMD instructions are used only if `CTL_SIMD_LOGK` >= 2. |
+| `CTL_USE_PERFECT_CUSTOMIZATION` | ON / OFF        | OFF           | If set, use perfect customization in CCH on which CTL is based. Default is 'OFF'.                                                                                                                                    |
+
+### Running Preprocessing, Customization and Point-to-Point Shortest-Path Queries
+
+The `RunP2PAlgo` executable takes input arguments as outlined at the top of
+the file `Launchers/RunP2PAlgo.cc`.
+
+The central inputs are a road network in the binary representation of this framework,
+and, when running queries, a set of origin-destination (O-D) pairs in a CSV file.
+The `ConvertGraph` tool in the `RawData` directory can be used to convert a road network from other 
+formats to the binary representation of this framework.
+For example the road networks from the 9th DIMACS Implementation Challenge on Shortest Paths 
+(available at https://www.diag.uniroma1.it/~challenge9/) can easily be converted.
+The `GenerateODPairs` tool in the `RawData` directory can be used to generate a set of random O-D pairs in a road network
+based on a distribution of O-D distances or Dijkstra ranks.
+
+To evaluate query performance, first use `RunP2PAlgo` to run the preprocessing phase of the respective algorithm and
+write the resulting data to a file (see top of file).
+Then run `RunP2PAlgo` again with a demand file (`-d` flag) and pass the result of the preprocessing step.
+
+To evaluate customization performance, first run the preprocessing phase as described above.
+Then run `RunP2PAlgo` with `CCH-Custom` or `CTL-Custom` for the algorithm parameter.
