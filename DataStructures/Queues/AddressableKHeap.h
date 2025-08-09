@@ -128,6 +128,12 @@ class AddressableKHeap {
       increaseKey(id, newKey);
   }
 
+  uint64_t sizeInBytes() const {
+    return sizeof(AddressableKHeap<K>)
+           + heap.size() * sizeof(HeapElement)
+           + elementIdToHeapIndex.size() * sizeof(int);
+  }
+
  private:
   // An element in this heap, with an associated ID and key.
   struct HeapElement {

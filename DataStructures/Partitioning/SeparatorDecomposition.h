@@ -58,6 +58,10 @@ struct SeparatorDecomposition {
     order.writeTo(out);
   }
 
+  uint64_t sizeInBytes() const {
+    return sizeof(*this) + tree.size() * sizeof(Node) + order.sizeInBytes();
+  }
+
   std::vector<Node> tree; // The rooted tree representing this separator decomposition.
   Permutation order;      // The associated nested dissection order.
 };

@@ -84,6 +84,12 @@ class ParentLabelContainer {
     return lastPath;
   }
 
+  uint64_t sizeInBytes() const {
+    return sizeof(ParentLabelContainer<GraphT, LabelSetT>)
+           + parent.size() * sizeof(ParentLabel)
+           + lastPath.capacity() * sizeof(int32_t);
+  }
+
  private:
   const GraphT& graph;               // The graph on which we compute shortest paths.
   AlignedVector<ParentLabel> parent; // The parent information for each vertex.

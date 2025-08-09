@@ -20,7 +20,7 @@ public:
 
     struct ConstBatchLabel {
 
-        ConstBatchLabel(Batch const * const startOfLabel, const uint32_t numHubs)
+        ConstBatchLabel(Batch const *const startOfLabel, const uint32_t numHubs)
                 : startOfLabel(startOfLabel), numHubs(numHubs), numBatches(numHubs / K + (numHubs % K != 0)) {}
 
         int32_t dist(const uint32_t &hubIdx) const {
@@ -45,7 +45,7 @@ public:
             return startOfLabel[numBatches + batchIdx];
         }
 
-        Batch const * const startOfLabel;
+        Batch const *const startOfLabel;
         const uint32_t numHubs;
         const uint32_t numBatches;
     };
@@ -182,7 +182,8 @@ public:
     }
 
     uint64_t sizeInBytes() const {
-        return labelOffsets.size() * sizeof(typename decltype(labelOffsets)::value_type)
+        return sizeof(TruncatedTreeLabelling<LabelSet>)
+               + labelOffsets.size() * sizeof(typename decltype(labelOffsets)::value_type)
                + upLabelData.size() * sizeof(typename decltype(upLabelData)::value_type)
                + downLabelData.size() * sizeof(typename decltype(downLabelData)::value_type);
     }

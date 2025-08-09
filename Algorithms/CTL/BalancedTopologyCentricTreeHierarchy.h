@@ -84,7 +84,8 @@ public:
     }
 
     uint64_t sizeInBytes() const {
-        return firstSepSizeSum.size() * sizeof(decltype(firstSepSizeSum)::value_type) +
+        return sizeof(BalancedTopologyCentricTreeHierarchy) +
+        firstSepSizeSum.size() * sizeof(decltype(firstSepSizeSum)::value_type) +
                sepSizeSumsOnBranch.size() * sizeof(decltype(sepSizeSumsOnBranch)::value_type) +
                packedSideIds.size() * sizeof(decltype(packedSideIds)::value_type) +
                truncateVertex.numBlocks() * sizeof(BitVector::Block) ;

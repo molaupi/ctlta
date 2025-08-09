@@ -193,6 +193,12 @@ class CCHMetric {
     return {std::move(upGraph), std::move(downGraph), std::move(order), std::move(ranks)};
   }
 
+  uint64_t sizeInBytes() const {
+    return sizeof(*this)
+           + upWeights.size() * sizeof(int32_t)
+           + downWeights.size() * sizeof(int32_t);
+  }
+
  private:
   // Computes a respecting metric.
   void computeRespectingMetric() {

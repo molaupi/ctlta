@@ -51,6 +51,12 @@ class StampedDistanceLabelContainer {
     return distanceLabels[v];
   }
 
+  uint64_t sizeInBytes() const {
+    return sizeof(StampedDistanceLabelContainer) +
+           distanceLabels.size() * sizeof(DistanceLabelT) +
+           timestamps.size() * sizeof(int) + sizeof(int);
+  }
+
  private:
   AlignedVector<DistanceLabelT> distanceLabels; // The distance labels of the vertices.
   std::vector<int> timestamps;                  // The timestamps indicating if a label is valid.

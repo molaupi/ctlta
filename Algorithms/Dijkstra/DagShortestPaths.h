@@ -102,6 +102,10 @@ public:
         return parent.getReverseEdgePath(t);
     }
 
+    uint64_t sizeInBytes() const {
+        return distanceLabels.sizeInBytes() + parent.sizeInBytes() + queue.sizeInBytes();
+    }
+
 private:
     // Resets the distance labels and inserts the source into the queue.
     void init(const int s, const int offset = 0) {

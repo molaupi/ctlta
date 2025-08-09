@@ -134,6 +134,8 @@ inline void runQueries(const CommandLineParser &clp) {
     const auto demandFileName = clp.getValue<std::string>("d");
     auto outputFileName = clp.getValue<std::string>("o");
 
+    static constexpr uint64_t BYTES_PER_MB = 1 << 20;
+
     // Open the output CSV file.
     if (!endsWith(outputFileName, ".csv"))
         outputFileName += ".csv";
@@ -255,6 +257,11 @@ inline void runQueries(const CommandLineParser &clp) {
         outputFile << "# OD pairs: " << demandFileName << '\n';
 
         CCHTree algo(minCH, cch.getEliminationTree());
+        outputFile << "# Memory usage CCH: " << (cch.sizeInBytes()) / BYTES_PER_MB << " MB" << '\n';
+        outputFile << "# Memory usage CCHMetric: " << (metric.sizeInBytes()) / BYTES_PER_MB << " MB" << '\n';
+        outputFile << "# Memory usage EliminationTreeQuery: " << (algo.sizeInBytes()) / BYTES_PER_MB << " MB" << '\n';
+        outputFile << "# Memory usage total: "
+                   << (cch.sizeInBytes() + metric.sizeInBytes() + algo.sizeInBytes()) / BYTES_PER_MB << " MB" << '\n';
         runQueries(algo, demandFileName, outputFile, [&](const int v) { return minCH.rank(v); });
 
     } else if (algorithmName == "CTL") {
@@ -292,13 +299,20 @@ inline void runQueries(const CommandLineParser &clp) {
         outputFile << "# Graph: " << graphFileName << '\n';
         outputFile << "# Separator: " << sepFileName << '\n';
         outputFile << "# OD pairs: " << demandFileName << '\n';
-        static constexpr uint64_t BYTES_PER_MB = 1 << 20;
-        outputFile << "# Mem hierarchy = " << treeHierarchy.sizeInBytes() / BYTES_PER_MB << " MB, Mem labelling = "
-                   << ctl.sizeInBytes() / BYTES_PER_MB << " MB" << '\n';
 
         CTLQuery<CTLMetric<LabellingT>::SearchGraph, LabellingT> algo(treeHierarchy, metric.upwardGraph(),
                                                                       metric.downwardGraph(), metric.upwardWeights(),
                                                                       metric.downwardWeights(), ctl);
+
+
+        outputFile << "# Memory usage CCH: " << (cch.sizeInBytes()) / BYTES_PER_MB << " MB" << '\n';
+        outputFile << "# Memory usage TreeHierarchy: " << (treeHierarchy.sizeInBytes()) / BYTES_PER_MB << " MB" << '\n';
+        outputFile << "# Memory usage Labelling: " << (ctl.sizeInBytes()) / BYTES_PER_MB << " MB" << '\n';
+        outputFile << "# Memory usage CTLMetric: " << (metric.sizeInBytes()) / BYTES_PER_MB << " MB" << '\n';
+        outputFile << "# Memory usage CTLQuery: " << (algo.sizeInBytes()) / BYTES_PER_MB << " MB" << '\n';
+        outputFile << "# Memory usage total: " <<
+                   (cch.sizeInBytes() + treeHierarchy.sizeInBytes() + ctl.sizeInBytes() + metric.sizeInBytes() +
+                    algo.sizeInBytes()) / BYTES_PER_MB << " MB" << '\n';
         runQueries(algo, demandFileName, outputFile, [&](const int v) { return cch.getRanks()[v]; });
     } else {
 

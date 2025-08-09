@@ -121,6 +121,10 @@ class CH {
     ranks.writeTo(out);
   }
 
+  uint64_t sizeInBytes() const {
+    return upGraph.sizeInBytes() + downGraph.sizeInBytes() + order.sizeInBytes() + ranks.sizeInBytes();
+  }
+
  private:
   SearchGraph upGraph;   // The upward graph.
   SearchGraph downGraph; // The downward graph.

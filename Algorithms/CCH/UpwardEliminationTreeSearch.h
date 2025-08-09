@@ -150,6 +150,10 @@ public:
         return parent.getReverseEdgePath(t, i);
     }
 
+    uint64_t sizeInBytes() const {
+        return distanceLabels.sizeInBytes() + parent.sizeInBytes() + nextVertices.sizeInBytes() + sizeof(lastSources);
+    }
+
 private:
     // Initializes the labels for computing multiple shortest-path trees simultaneously.
     void init(const std::array<int, K> &sources, const std::array<int, K> &offsets = {}) {

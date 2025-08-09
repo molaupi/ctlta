@@ -37,6 +37,10 @@ class SimpleDistanceLabelContainer {
     return distanceLabels[v];
   }
 
+  uint64_t sizeInBytes() const {
+    return sizeof(SimpleDistanceLabelContainer) + distanceLabels.size() * sizeof(DistanceLabelT);
+  }
+
  private:
   AlignedVector<DistanceLabelT> distanceLabels; // The distance labels of the vertices.
 };

@@ -63,6 +63,10 @@ class CTLQuery {
             return static_cast<uint32_t>(dists.size());
         }
 
+        uint64_t sizeInBytes() const {
+            return sizeof(TemporaryLabel) + dists.capacity() * sizeof(Batch) + accessVertices.capacity() * sizeof(Batch);
+        }
+
     private:
         uint32_t _numHubs;
         AlignedVector<Batch> dists;
@@ -114,6 +118,10 @@ class CTLQuery {
 
     struct MockSearch {
         MockSearch(const SearchGraphT &, const int32_t *, const PruneSearchAtUntruncatedVertices<true> &) {}
+
+        uint64_t sizeInBytes() const {
+            return 0; // No memory used in mock search.
+        }
     };
 
     using TruncatedVertexUpwardSearch = std::conditional_t<NoTruncatedVertices, MockSearch, DagShortestPaths<SearchGraphT, BasicLabelSet<0, ParentInfo::FULL_PARENT_INFO>, PruneSearchAtUntruncatedVertices<true>>>;
@@ -363,6 +371,18 @@ public:
         return lastDownPath;
     }
 
+    uint64_t sizeInBytes() const {
+        uint64_t size = sizeof(CTLQuery);
+        size += sizeof(lastS) + sizeof(lastT) + sizeof(lastDistance) + sizeof(lastMeetingHubIdx) + sizeof(minCCHDistMeetingVertex);
+        size += lastUpPath.capacity() * sizeof(int32_t) + lastDownPath.capacity() * sizeof(int32_t);
+        size += tempUpLabel.sizeInBytes();
+        size += tempDownLabel.sizeInBytes();
+        size += buildUpLabelSearch.sizeInBytes();
+        size += buildDownLabelSearch.sizeInBytes();
+        size += upTruncatedSearchSpace.capacity() * sizeof(int32_t);
+        size += downTruncatedSearchSpace.capacity() * sizeof(int32_t);
+        return size;
+    }
 
 private:
 

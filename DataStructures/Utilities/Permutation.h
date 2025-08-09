@@ -127,6 +127,10 @@ class Permutation {
     bio::write(out, permutation);
   }
 
+  uint64_t sizeInBytes() const {
+    return sizeof(*this) + permutation.size() * sizeof(decltype(permutation)::value_type);
+  }
+
  private:
   std::vector<int32_t> permutation; // permutation[i] is the new location of the element at i.
 };

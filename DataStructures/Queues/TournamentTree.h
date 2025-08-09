@@ -51,6 +51,10 @@ class TournamentTree {
     }
   }
 
+  uint64_t sizeInBytes() const {
+    return sizeof(TournamentTree<logK>);
+  }
+
  private:
   // A vertex in the tournament tree. It represents the leading element from one of the sequences.
   struct Vertex {

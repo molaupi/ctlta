@@ -65,6 +65,10 @@ public:
             return cchMetric.downWeights.data();
     }
 
+    uint64_t sizeInBytes() const {
+        return sizeof(*this) + cchMetric.sizeInBytes() + minimumWeightedCH.sizeInBytes();
+    }
+
 private:
 
     using LabelSet = typename LabellingT::LabelSet;
