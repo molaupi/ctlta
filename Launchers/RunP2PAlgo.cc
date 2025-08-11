@@ -38,6 +38,7 @@
 inline void printUsage() {
     std::cout <<
               "Usage: RunP2PAlgo -a CH         -o <file> -g <file>\n"
+
               "       RunP2PAlgo -a CCH        -o <file> -g <file> [-b <balance>]\n"
               "       RunP2PAlgo -a CTL        -o <file> -g <file> [-b <balance>]\n\n"
 
@@ -262,6 +263,7 @@ inline void runQueries(const CommandLineParser &clp) {
         outputFile << "# Memory usage EliminationTreeQuery: " << (algo.sizeInBytes()) / BYTES_PER_MB << " MB" << '\n';
         outputFile << "# Memory usage total: "
                    << (cch.sizeInBytes() + metric.sizeInBytes() + algo.sizeInBytes()) / BYTES_PER_MB << " MB" << '\n';
+
         runQueries(algo, demandFileName, outputFile, [&](const int v) { return minCH.rank(v); });
 
     } else if (algorithmName == "CTL") {
@@ -304,7 +306,6 @@ inline void runQueries(const CommandLineParser &clp) {
                                                                       metric.downwardGraph(), metric.upwardWeights(),
                                                                       metric.downwardWeights(), ctl);
 
-
         outputFile << "# Memory usage CCH: " << (cch.sizeInBytes()) / BYTES_PER_MB << " MB" << '\n';
         outputFile << "# Memory usage TreeHierarchy: " << (treeHierarchy.sizeInBytes()) / BYTES_PER_MB << " MB" << '\n';
         outputFile << "# Memory usage Labelling: " << (ctl.sizeInBytes()) / BYTES_PER_MB << " MB" << '\n';
@@ -320,6 +321,7 @@ inline void runQueries(const CommandLineParser &clp) {
 
     }
 }
+
 
 // Invoked when the user wants to run the preprocessing or customization phase of a P2P algorithm.
 inline void runPreprocessing(const CommandLineParser &clp) {
@@ -351,13 +353,20 @@ inline void runPreprocessing(const CommandLineParser &clp) {
         if (!outputFile.good())
             throw std::invalid_argument("file cannot be opened -- '" + outputFileName);
 
+        std::cout << "Constructing CH for " << graphFileName << "... " << std::flush;
         CH ch;
+        Timer timer;
         ch.preprocess<TravelTimeAttribute>(graph);
+        const auto preprocessTime = timer.elapsed<std::chrono::microseconds>();
         ch.writeTo(outputFile);
+
+        std::cout << " finished (" << preprocessTime << " microseconds)." << std::endl;
 
     } else if (algorithmName == "CCH") {
 
         // Run the preprocessing phase of CCH.
+        std::cout << "Constructing separator decomposition for CCH for " << graphFileName << "... " << std::flush;
+        Timer timer;
         if (imbalance < 0)
             throw std::invalid_argument("invalid imbalance -- '" + std::to_string(imbalance) + "'");
 
@@ -395,13 +404,16 @@ inline void runPreprocessing(const CommandLineParser &clp) {
         }
         sepDecomp.order.assign(decomp.order.begin(), decomp.order.end());
 
+
+        const auto preprocessTime = timer.elapsed<std::chrono::microseconds>();
+        std::cout << " finished (" << preprocessTime << " microseconds)." << std::endl;
+
         if (!endsWith(outputFileName, ".sep.bin"))
             outputFileName += ".sep.bin";
         std::ofstream outputFile(outputFileName, std::ios::binary);
         if (!outputFile.good())
             throw std::invalid_argument("file cannot be opened -- '" + outputFileName);
         sepDecomp.writeTo(outputFile);
-
     } else if (algorithmName == "CCH-custom") {
 
         // Run the customization phase of CCH.
@@ -419,12 +431,15 @@ inline void runPreprocessing(const CommandLineParser &clp) {
             throw std::invalid_argument("file cannot be opened -- '" + outputFileName + ".csv'");
         outputFile << "# Graph: " << graphFileName << '\n';
         outputFile << "# Separator: " << sepFileName << '\n';
-        outputFile << "basic_customization,perfect_customization,construction,total_time\n";
-
-        CCH cch;
-        cch.preprocess(graph, decomp);
 
         Timer timer;
+        CCH cch;
+        cch.preprocess(graph, decomp);
+        const auto preprocessTime = timer.elapsed<std::chrono::microseconds>();
+        outputFile << "# Preprocess time (for given sepdecomp): " << preprocessTime << " microseconds.\n";
+
+        outputFile << "basic_customization,perfect_customization,construction,total_time\n";
+        timer.restart();
         int basicCustom, perfectCustom, construct, tot;
         for (auto i = 0; i < numCustomRuns; ++i) {
             {
@@ -448,6 +463,8 @@ inline void runPreprocessing(const CommandLineParser &clp) {
 
     } else if (algorithmName == "CTL") {
         // Run the preprocessing phase of CTL.
+        std::cout << "Constructing separator decomposition with strict dissection for CTL for " << graphFileName << "... " << std::flush;
+        Timer timer;
         if (imbalance < 0)
             throw std::invalid_argument("invalid imbalance -- '" + std::to_string(imbalance) + "'");
 
@@ -487,6 +504,10 @@ inline void runPreprocessing(const CommandLineParser &clp) {
         }
         sepDecomp.order.assign(decomp.order.begin(), decomp.order.end());
 
+
+        const auto preprocessTime = timer.elapsed<std::chrono::microseconds>();
+        std::cout << " finished (" << preprocessTime << " microseconds)." << std::endl;
+
         if (!endsWith(outputFileName, ".strict_bisep.bin"))
             outputFileName += ".strict_bisep.bin";
         std::ofstream outputFile(outputFileName, std::ios::binary);
@@ -510,11 +531,10 @@ inline void runPreprocessing(const CommandLineParser &clp) {
             throw std::invalid_argument("file cannot be opened -- '" + outputFileName + ".csv'");
         outputFile << "# Graph: " << graphFileName << '\n';
         outputFile << "# Separator: " << sepFileName << '\n';
-        outputFile << "cch_customization,ctl_customization,total_time\n";
 
+        Timer timer;
         CCH cch;
         cch.preprocess(graph, decomp);
-
         BalancedTopologyCentricTreeHierarchy treeHierarchy;
         treeHierarchy.preprocess(graph, decomp);
         using CTLLabelSet = std::conditional_t<CTL_SIMD_LOGK == 0,
@@ -523,8 +543,11 @@ inline void runPreprocessing(const CommandLineParser &clp) {
         using LabellingT = TruncatedTreeLabelling<CTLLabelSet>;
         LabellingT ctl(treeHierarchy);
         ctl.init();
+        const auto preprocessTime = timer.elapsed<std::chrono::microseconds>();
+        outputFile << "# Preprocess time (for given sepdecomp): " << preprocessTime << " microseconds.\n";
 
-        Timer timer;
+        outputFile << "cch_customization,ctl_customization,total_time\n";
+        timer.restart();
         int cchCustom, ctlCustom, tot;
         for (auto i = 0; i < numCustomRuns; ++i) {
             {
@@ -547,6 +570,7 @@ inline void runPreprocessing(const CommandLineParser &clp) {
             outputFile << cchCustom << ',' << ctlCustom << ',' << tot << '\n';
         }
     } else if (algorithmName == "CTLSACCH-custom") {
+
         // TODO: Allow using CCH from CTLSA again.
         throw std::invalid_argument("CTLSACCH-custom is not supported at the moment.");
 //      // CTLSACCH can only deal with undirected graphs.
