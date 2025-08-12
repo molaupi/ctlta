@@ -16,6 +16,7 @@
 #include "Tools/ConcurrentHelpers.h"
 #include "Tools/Constants.h"
 #include "Tools/Workarounds.h"
+#include "Tools/Timer.h"
 
 // This class encodes the actual cost of the edges in a customizable contraction hierarchy. It
 // stores the edge weights and contains several sequential and parallel customization algorithms.
@@ -44,8 +45,16 @@ class CCHMetric {
     runPerfectCustomization([](const int /*e*/) {}, [](const int /*e*/) {});
   }
 
-  // Returns a weighted CH having the smallest possible number of edges for the given order.
   CH buildMinimumWeightedCH() {
+      int64_t time = 0;
+      return buildMinimumWeightedCH<NoOpTimer>(time, time, time);
+  }
+
+  // Returns a weighted CH having the smallest possible number of edges for the given order.
+  template<typename TimerT>
+  CH buildMinimumWeightedCH(int64_t& basicCustomizationTime,
+                            int64_t& perfectCustomizationTime,
+                            int64_t& constructionTime) {
     const auto& cchGraph = cch.getUpwardGraph();
     std::vector<int8_t> keepUpEdge;
     std::vector<int8_t> keepDownEdge;
@@ -60,11 +69,18 @@ class CCHMetric {
 
     keepUpEdge.back() = false;
     keepDownEdge.back() = false;
+
+    TimerT timer;
     customize();
+    basicCustomizationTime = timer.template elapsed<std::chrono::microseconds>();
+
+    timer.restart();
     runPerfectCustomization(
         [&](const int e) { keepUpEdge[e] = false; },
         [&](const int e) { keepDownEdge[e] = false; });
+    perfectCustomizationTime = timer.template elapsed<std::chrono::microseconds>();
 
+    timer.restart();
     ConcurrentLocalIdMap<4> upEdgeIdMap(keepUpEdge);
     ConcurrentLocalIdMap<4> downEdgeIdMap(keepDownEdge);
     const auto numUpEdges = upEdgeIdMap.numLocalIds();
@@ -189,6 +205,8 @@ class CCHMetric {
       #pragma omp section
       ranks = cch.getRanks();
     }
+
+    constructionTime = timer.template elapsed<std::chrono::microseconds>();
 
     return {std::move(upGraph), std::move(downGraph), std::move(order), std::move(ranks)};
   }

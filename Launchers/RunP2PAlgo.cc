@@ -439,31 +439,36 @@ inline void runPreprocessing(const CommandLineParser &clp) {
         outputFile << "# Preprocess time (for given sepdecomp): " << preprocessTime << " microseconds.\n";
 
         outputFile << "basic_customization,perfect_customization,construction,total_time\n";
-        timer.restart();
-        int basicCustom, perfectCustom, construct, tot;
+        int64_t basicCustom, perfectCustom, construct, tot;
         for (auto i = 0; i < numCustomRuns; ++i) {
-            {
-                CCHMetric metric(cch, &graph.travelTime(0));
-                timer.restart();
-                metric.customize();
-                basicCustom = timer.elapsed<std::chrono::microseconds>();
-                timer.restart();
-                metric.runPerfectCustomization();
-                perfectCustom = timer.elapsed<std::chrono::microseconds>();
-            }
-            {
-                CCHMetric metric(cch, &graph.travelTime(0));
-                timer.restart();
-                metric.buildMinimumWeightedCH();
-                tot = timer.elapsed<std::chrono::microseconds>();
-            }
-            construct = tot - basicCustom - perfectCustom;
+//            {
+//                CCHMetric metric(cch, &graph.travelTime(0));
+//                timer.restart();
+//                metric.customize();
+//                basicCustom = timer.elapsed<std::chrono::microseconds>();
+//                timer.restart();
+//                metric.runPerfectCustomization();
+//                perfectCustom = timer.elapsed<std::chrono::microseconds>();
+//            }
+//            {
+//                CCHMetric metric(cch, &graph.travelTime(0));
+//                timer.restart();
+//                metric.buildMinimumWeightedCH();
+//                tot = timer.elapsed<std::chrono::microseconds>();
+//            }
+
+            timer.restart();
+            CCHMetric metric(cch, &graph.travelTime(0));
+            metric.buildMinimumWeightedCH<Timer>(basicCustom, perfectCustom, construct);
+            tot = timer.elapsed<std::chrono::microseconds>();
+
             outputFile << basicCustom << ',' << perfectCustom << ',' << construct << ',' << tot << '\n';
         }
 
     } else if (algorithmName == "CTL") {
         // Run the preprocessing phase of CTL.
-        std::cout << "Constructing separator decomposition with strict dissection for CTL for " << graphFileName << "... " << std::flush;
+        std::cout << "Constructing separator decomposition with strict dissection for CTL for " << graphFileName
+                  << "... " << std::flush;
         Timer timer;
         if (imbalance < 0)
             throw std::invalid_argument("invalid imbalance -- '" + std::to_string(imbalance) + "'");

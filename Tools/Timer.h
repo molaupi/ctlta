@@ -24,3 +24,19 @@ class Timer {
  private:
   std::chrono::steady_clock::time_point startTime; // Time point when the timer was started.
 };
+
+
+class NoOpTimer {
+    public:
+    // Constructs a no-op timer.
+    NoOpTimer() {}
+
+    // Returns the time elapsed since the timer was started, which is always zero.
+    template <typename = std::chrono::milliseconds>
+    int64_t elapsed() const {
+        return 0;
+    }
+
+    // Restarts the timer, which does nothing in this case.
+    void restart() {}
+};
