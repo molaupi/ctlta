@@ -751,6 +751,8 @@ inline void runPreprocessing(const CommandLineParser &clp) {
 }
 
 int main(int argc, char *argv[]) {
+    std::cout << "Using " << NUM_THREADS << " threads for parallel regions in RunP2PAlgo." << std::endl;
+    omp_set_num_threads(NUM_THREADS);
     try {
         CommandLineParser clp(argc, argv);
         if (clp.isSet("help"))
