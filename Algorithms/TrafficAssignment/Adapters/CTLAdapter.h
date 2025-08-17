@@ -27,8 +27,8 @@ namespace trafficassignment {
         using CTLLabelSet = std::conditional_t<CTL_SIMD_LOGK == 0,
                 BasicLabelSet<0, ParentInfo::FULL_PARENT_INFO>,
                 SimdLabelSet<CTL_SIMD_LOGK, ParentInfo::FULL_PARENT_INFO>>;
-        using LabellingT = TruncatedTreeLabelling<CTLLabelSet>;
-        using CTLMetricT = CTLMetric<LabellingT>;
+        using LabellingT = TruncatedTreeLabelling<CTLLabelSet::K, true>;
+        using CTLMetricT = CTLMetric<LabellingT, CTLLabelSet>;
 
     public:
 
@@ -108,7 +108,7 @@ namespace trafficassignment {
             const CTLMetricT::SearchGraph &upGraph;
             const CTLMetricT::SearchGraph &downGraph;
             const Permutation &ranks; // rank[v] is the rank of vertex v in the contraction order
-            CTLQuery <CTLMetricT::SearchGraph, LabellingT> ctlQuery;
+            CTLQuery <CTLMetricT::SearchGraph, LabellingT, CTLLabelSet> ctlQuery;
             std::array<int, K> distances; // distances computed in last call to run()
 
             AlignedVector<int> &flowsOnUpEdges;     // The flows in the upward graph.

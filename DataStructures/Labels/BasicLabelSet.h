@@ -164,6 +164,22 @@ public:
             std::fill(values.begin(), values.end(), val);
         }
 
+//        explicit DistanceLabel(int const * const ptr) {
+//            load(ptr);
+//        }
+
+        // Copy K integer values starting at ptr into distance label. Make sure that there is no overlap between
+        // [ptr, ptr+K) and this label.
+        void load(int const * const ptr) {
+            std::copy(ptr, ptr + K, values.begin());
+        }
+
+        // Copy K integer values from this distance label into ptr. Make sure that there is no overlap between
+        // [ptr, ptr+K) and this label.
+        void store(int * const ptr) const {
+            std::copy(values.begin(), values.end(), ptr);
+        }
+
         // Returns a reference to the i-th distance value in this label.
         int &operator[](const int i) {
             assert(i >= 0);

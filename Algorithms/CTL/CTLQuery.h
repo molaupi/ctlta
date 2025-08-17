@@ -3,10 +3,10 @@
 #include "Algorithms/CTL/TruncatedTreeLabelling.h"
 #include "Algorithms/Dijkstra/DagShortestPaths.h"
 
-template<typename SearchGraphT, typename LabellingT>
+template<typename SearchGraphT, typename LabellingT, typename LabelSetT>
 class CTLQuery {
 
-    using LabelSet = typename LabellingT::LabelSet;
+    using LabelSet = LabelSetT;
     static constexpr uint32_t K = LabelSet::K;
     using BatchMask = LabelSet::LabelMask;
     using Batch = typename LabelSet::DistanceLabel;
@@ -20,47 +20,33 @@ class CTLQuery {
 
         void init(const size_t numHubs) {
             _numHubs = numHubs;
-            const auto numBatches = numHubs / K + (numHubs % K != 0);
-            dists.assign(numBatches, INFTY);
+            dists.assign(numHubs, INFTY);
             if constexpr (LabelSet::KEEP_PARENT_EDGES)
-                accessVertices.assign(numBatches, INVALID_VERTEX);
+                accessVertices.assign(numHubs, INVALID_VERTEX);
         }
 
-        int32_t dist(const uint32_t &hubIdx) const {
+        const int32_t& dist(const uint32_t &hubIdx) const {
             KASSERT(hubIdx < numHubs());
-            return dists[hubIdx / K][hubIdx % K];
+            return dists[hubIdx];
         }
 
-        const Batch &distBatch(const uint32_t &batchIdx) const {
-            KASSERT(batchIdx < dists.size());
-            return dists[batchIdx];
+        int32_t& dist(const uint32_t &hubIdx) {
+            KASSERT(hubIdx < _numHubs);
+            return dists[hubIdx];
         }
 
-        Batch &distBatch(const uint32_t &batchIdx) {
-            KASSERT(batchIdx < dists.size());
-            return dists[batchIdx];
+        const int &accessVertex(const uint32_t &hubIdx) const requires LabelSet::KEEP_PARENT_EDGES {
+            KASSERT(hubIdx < _numHubs);
+            return accessVertices[hubIdx];
         }
 
-        template<bool hasPathEdges = LabelSet::KEEP_PARENT_EDGES,
-                std::enable_if_t<hasPathEdges, bool> = true>
-        int32_t accessVertex(const uint32_t &hubIdx) const {
-            KASSERT(hubIdx < numHubs());
-            return accessVertices[hubIdx / K][hubIdx % K];
-        }
-
-        template<bool hasPathEdges = LabelSet::KEEP_PARENT_EDGES,
-                std::enable_if_t<hasPathEdges, bool> = true>
-        Batch &accessVertexBatch(const uint32_t &batchIdx) {
-            KASSERT(batchIdx < dists.size());
-            return accessVertices[batchIdx];
+        int &accessVertex(const uint32_t &hubIdx) requires LabelSet::KEEP_PARENT_EDGES {
+            KASSERT(hubIdx < _numHubs);
+            return accessVertices[hubIdx];
         }
 
         uint32_t numHubs() const {
             return _numHubs;
-        }
-
-        uint32_t numBatches() const {
-            return static_cast<uint32_t>(dists.size());
         }
 
         uint64_t sizeInBytes() const {
@@ -69,8 +55,8 @@ class CTLQuery {
 
     private:
         uint32_t _numHubs;
-        AlignedVector<Batch> dists;
-        AlignedVector<Batch> accessVertices;
+        AlignedVector<int32_t> dists;
+        AlignedVector<int32_t> accessVertices;
     };
 
     template<bool UP>
@@ -92,17 +78,17 @@ class CTLQuery {
                 return false;
             }
 
+            // TODO: manually vectorize (?)
             // Update temporary label of source / target with label of v.
             const auto labelOfV = UP ? ctl.upLabel(v) : ctl.downLabel(v);
-            const auto maxVec = std::min(temporaryLabel.numBatches(), labelOfV.numBatches);
-            for (auto i = 0; i < maxVec; ++i) {
-                const Batch distViaV = distToV[0] + labelOfV.distBatch(i);
-                Batch &distTemp = temporaryLabel.distBatch(i);
-                const auto improved = distViaV < distTemp;
-                distTemp = select(improved, distViaV, distTemp);
-                if constexpr (LabelSet::KEEP_PARENT_EDGES) {
-                    Batch &accessVertexTemp = temporaryLabel.accessVertexBatch(i);
-                    accessVertexTemp = select(improved, v, accessVertexTemp);
+            const auto endHub = std::min(temporaryLabel.numHubs(), labelOfV.numHubs);
+            for (int i = 0; i < endHub; ++i) {
+                const auto distViaV = distToV[0] + labelOfV.dist(i);
+                auto& distTemp = temporaryLabel.dist(i);
+                if (distViaV < distTemp) {
+                    distTemp = distViaV;
+                    if constexpr (LabelSet::KEEP_PARENT_EDGES)
+                        temporaryLabel.accessVertex(i) = v;
                 }
             }
 
@@ -412,42 +398,16 @@ private:
     template<typename UpLabel, typename DownLabel>
     inline void computeMinDistanceInLabels(const UpLabel &up, const DownLabel &down, const uint32_t lowestCommonHub) {
 
-        // Compute minimum values using SIMD instructions for full SIMD vectors:
-        const uint32_t numFullBlocks = lowestCommonHub / K;
-        Batch dMin(lastDistance);
-        Batch minBlock(-1);
-        BatchMask improved;
-        int32_t b = 0;
-        Batch bAsBatch(0);
-        for (; b < numFullBlocks; ++b, bAsBatch += 1) {
-            const auto dNew = up.distBatch(b) + down.distBatch(b);
-            improved = (dNew < dMin);
-            dMin = select(improved, dNew, dMin);
-            minBlock = select(improved, bAsBatch, minBlock);
-        }
-
-        // If there is a partial batch, consider it, too
-        if constexpr (K > 1) {
-            if (b * K < lowestCommonHub) {
-                auto dNew = up.distBatch(b) + down.distBatch(b);
-                dNew.setUpperElements(lowestCommonHub - b * K, INFTY);
-                improved = (dNew < dMin);
-                dMin = select(improved, dNew, dMin);
-                minBlock = select(improved, bAsBatch, minBlock);
+        // Compute minimum distance by combining labels
+        int32_t const * const startUp = up.startDists();
+        int32_t const * const startDown = down.startDists();
+        for (int i = 0; i < lowestCommonHub; ++i) {
+            const auto newDist = *(startUp + i) + *(startDown + i);
+            if (newDist < lastDistance) {
+                lastDistance = newDist;
+                lastMeetingHubIdx = i;
             }
         }
-
-        const auto minInBlocks = dMin.horizontalMin();
-        lastDistance = minInBlocks;
-
-        // Find out the meeting hub idx which is based on the smallest block index among any blocks that have the
-        // minimum distance
-        minBlock = select(minInBlocks == dMin, minBlock, Batch(numFullBlocks + 1));
-        const int minMinBlock = minBlock.horizontalMin();
-        const int idx = firstSet(minBlock == minMinBlock);
-        lastMeetingHubIdx = minMinBlock * K + idx;
-//        const auto idxWithinBlock = firstSet(dMin == minInBlocks);
-//        lastMeetingHubIdx = minBlock[idxWithinBlock] * K + idxWithinBlock;
     }
 
     const BalancedTopologyCentricTreeHierarchy &hierarchy;
