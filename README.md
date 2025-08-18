@@ -56,14 +56,14 @@ This builds an executable `AssignTraffic` at `Build/Release/Launchers/AssignTraf
 
 There are a number of additional options for routing algorithms that can be passed as CMake parameters:
 
-| Option                          | Possible Values | Default value | Description                                                                                                                                                                                                          |
-|---------------------------------|-----------------|---------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `NUM_THREADS`                   | integer         | 1             | Number of threads to use for parallelization of customization and queries in TA. Default is 1.                                                                                                                       |
-| `TA_LOG_K`                      | integer         | 0             | Number of simultaneous shortest-path computations using centralized queries (see [1]).                                                                                                                               |
-| `TA_USE_SIMD_SEARCH`            | ON / OFF        | ON            | If set, may use SIMD instructions for centralized shortest-path queries. Only has an effect if `TA_LOG_K` >= 2.                                                                                                      |
-| `CTL_THETA`                     | integer         | 0             | Set parameter 'theta', i.e., maximum size of truncated subtrees, of the CTL algorithm (see [2]). Set to 0 for no truncation.                                                                                         | 
-| `CTL_SIMD_LOGK`                 | integer         | 0             | Given value L, the CTL algorithm uses distance labels of width 2^L in the labelling, possibly employing SIMD instructions during customization and queries. SIMD instructions are used only if `CTL_SIMD_LOGK` >= 2. |
-| `CTL_USE_PERFECT_CUSTOMIZATION` | ON / OFF        | OFF           | If set, use perfect customization in CCH on which CTL is based. Default is 'OFF'.                                                                                                                                    |
+| Option                          | Possible Values | Default value | Description                                                                                                                                                               |
+|---------------------------------|-----------------|---------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `NUM_THREADS`                   | integer         | 1             | Number of threads to use for parallelization of customization and queries in TA. Default is 1.                                                                            |
+| `TA_LOG_K`                      | integer         | 0             | Number of simultaneous shortest-path computations using centralized queries (see [1]).                                                                                    |
+| `TA_USE_SIMD_SEARCH`            | ON / OFF        | ON            | If set, may use SIMD instructions for centralized shortest-path queries. Only has an effect if `TA_LOG_K` >= 2.                                                           |
+| `CTL_THETA`                     | integer         | 0             | Set parameter 'theta', i.e., maximum size of truncated subtrees, of the CTL algorithm (see [2]). Set to 0 for no truncation.                                              | 
+| `CTL_SIMD_LOGK`                 | integer         | 0             | Given value L >= 2, the CTL algorithm uses SIMD vector instructions of width 2^L during customization. |
+| `CTL_USE_PERFECT_CUSTOMIZATION` | ON / OFF        | OFF           | If set, use perfect customization in CCH on which CTL is based. Default is 'OFF'.                                                                                         |
 
 
 ### Running Traffic Assignment
@@ -100,7 +100,7 @@ There are a number of additional options for routing algorithms that can be pass
 |---------------------------------|-----------------|---------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `NUM_THREADS`                   | integer         | 1             | Number of threads to use for parallelization of customization. (Queries are run sequentially.) Default is 1.                                                                                                         |
 | `CTL_THETA`                     | integer         | 0             | Set parameter 'theta', i.e., maximum size of truncated subtrees, of the CTL algorithm (see [2]). Set to 0 for no truncation.                                                                                         | 
-| `CTL_SIMD_LOGK`                 | integer         | 0             | Given value L, the CTL algorithm uses distance labels of width 2^L in the labelling, possibly employing SIMD instructions during customization and queries. SIMD instructions are used only if `CTL_SIMD_LOGK` >= 2. |
+| `CTL_SIMD_LOGK`                 | integer         | 0             | Given value L >= 2, the CTL algorithm uses SIMD vector instructions of width 2^L during customization. |
 | `CTL_USE_PERFECT_CUSTOMIZATION` | ON / OFF        | OFF           | If set, use perfect customization in CCH on which CTL is based. Default is 'OFF'.                                                                                                                                    |
 
 ### Running Preprocessing, Customization and Point-to-Point Shortest-Path Queries
