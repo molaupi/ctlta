@@ -11,8 +11,7 @@ Engineered Customizable Contraction Hierarchies. ACM Journal of Experimental Alg
 24(2):2.4:1-2.4:28, 2019. [doi:10.1145/3362693](http://dx.doi.org/10.1145/3362693).
 
 The CTL algorithm is based on the paper
-* [2] Muhammad Farhan, et al. Customization Meets 2-Hop Labeling: Efficient Routing in Road Networks.
-* Proceedings of the VLDB, Volume 18, No. 10, 2025. https://vldb.org/pvldb/volumes/18/paper/Customization%20Meets%202-Hop%20Labeling%3A%20Efficient%20Routing%20in%20Road%20Networks
+* [2] Muhammad Farhan, et al. Customization Meets 2-Hop Labeling: Efficient Routing in Road Networks. Proceedings of the VLDB, Volume 18, No. 10, 2025. https://vldb.org/pvldb/volumes/18/paper/Customization%20Meets%202-Hop%20Labeling%3A%20Efficient%20Routing%20in%20Road%20Networks
 
 ## License
 
