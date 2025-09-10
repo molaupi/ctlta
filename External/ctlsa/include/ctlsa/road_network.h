@@ -28,6 +28,7 @@
 #include <map>
 #include <set>
 #include <fstream>
+#include <array>
 
 namespace ctlsa::road_network {
 
