@@ -9,18 +9,18 @@
 // A tournament tree, also known as selection tree or loser tree. Suppose we have k sorted sequences
 // that are to be merged into a single output sequence. We repeatedly have to find the smallest from
 // the leading elements in the k sequences. This can be done efficiently by a tournament tree.
-template <int logK>
+template <int logK, typename Key = int>
 class TournamentTree {
  public:
   static constexpr int K = 1 << logK; // The number of sequences that are to be merged.
 
   // Constructs a tournament tree given the leading elements in the k sequences.
-  explicit TournamentTree(const std::array<int, K>& keys) {
+  explicit TournamentTree(const std::array<Key, K>& keys) {
     build(keys);
   }
 
   // Builds a tournament tree given the leading elements in the k sequences.
-  void build(const std::array<int, K>& keys) {
+  void build(const std::array<Key, K>& keys) {
     std::array<Vertex, K> winners;
     for (int i = K - 2; i >= 0; i -= 2)
       minmax({keys[i], i}, {keys[i + 1], i + 1}, winners[getParent(i + K)], tree[getParent(i + K)]);
@@ -30,7 +30,7 @@ class TournamentTree {
   }
 
   // Returns the key of the smallest element.
-  int minKey() const {
+  Key minKey() const {
     return tree[0].key;
   }
 
@@ -40,7 +40,7 @@ class TournamentTree {
   }
 
   // Deletes the smallest element and inserts the next element from the corresponding sequence.
-  void deleteMin(const int keyOfNextElement) {
+  void deleteMin(const Key keyOfNextElement) {
     Vertex& winner = tree[0];
     winner.key = keyOfNextElement;
     int parent = winner.seq + K;
@@ -52,7 +52,7 @@ class TournamentTree {
   }
 
   uint64_t sizeInBytes() const {
-    return sizeof(TournamentTree<logK>);
+    return sizeof(TournamentTree<logK, Key>);
   }
 
  private:
@@ -63,7 +63,7 @@ class TournamentTree {
       return lhs.key < rhs.key;
     }
 
-    int key; // The key of the element.
+    Key key; // The key of the element.
     int seq; // The index of the sequence where the element comes from.
   };
 

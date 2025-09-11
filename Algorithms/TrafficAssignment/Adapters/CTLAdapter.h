@@ -50,8 +50,10 @@ namespace trafficassignment {
                     upGraph(metric.upwardGraph()),
                     downGraph(metric.downwardGraph()),
                     ranks(ranks),
+                    ctl(ctl),
                     ctlQuery(hierarchy, metric.upwardGraph(), metric.downwardGraph(), metric.upwardWeights(),
                              metric.downwardWeights(), ctl),
+                    nextVertices(sourceKeys),
                     flowsOnUpEdges(flowsOnUpEdges),
                     flowsOnDownEdges(flowsOnDownEdges),
                     localFlowsOnUpEdges(flowsOnUpEdges.size(), 0),
@@ -70,22 +72,42 @@ namespace trafficassignment {
                 for (auto j = 0; j < k; ++j) {
                     ctlQuery.run(ranks[sources[j]], ranks[targets[j]]);
                     distances[j] = ctlQuery.getDistance();
-
-                    // Assign flow to the edges (possibly shortcuts) on the computed paths.
-                    const auto &upEdges = ctlQuery.getEdgesOnUpPathUnordered();
-                    const auto &downEdges = ctlQuery.getEdgesOnDownPathUnordered();
-                    for (const auto &e: upEdges) {
-                        KASSERT(e >= 0);
-                        KASSERT(e < localFlowsOnUpEdges.size());
-                        ++localFlowsOnUpEdges[e];
-                    }
-                    for (const auto &e: downEdges) {
-                        KASSERT(e >= 0);
-                        KASSERT(e < localFlowsOnDownEdges.size());
-                        ++localFlowsOnDownEdges[e];
-                    }
-
+                    meetingHubIndices[j] = ctlQuery.getMeetingHubIdx();
+                    sourceKeys[j] = {ranks[sources[j]], ctlQuery.getMeetingHubIdx()};
+                    targetKeys[j] = {ranks[targets[j]], ctlQuery.getMeetingHubIdx()};
                 }
+                for (auto j = k; j < K; ++j) {
+                    distances[j] = INFTY;
+                    meetingHubIndices[j] = INFTY;
+                    sourceKeys[j] = {INFTY, INFTY};
+                    targetKeys[j] = {INFTY, INFTY};
+                }
+
+                addFlow.fill(1);
+                nextVertices.build(sourceKeys);
+                propagateFlowsOntoPackedPaths<true>();
+                addFlow.fill(1);
+                nextVertices.build(targetKeys);
+                propagateFlowsOntoPackedPaths<false>();
+
+
+
+//                {
+//                    // Assign flow to the edges (possibly shortcuts) on the computed paths.
+//                    const auto &upEdges = ctlQuery.getEdgesOnUpPathUnordered();
+//                    const auto &downEdges = ctlQuery.getEdgesOnDownPathUnordered();
+//                    for (const auto &e: upEdges) {
+//                        KASSERT(e >= 0);
+//                        KASSERT(e < localFlowsOnUpEdges.size());
+//                        ++localFlowsOnUpEdges[e];
+//                    }
+//                    for (const auto &e: downEdges) {
+//                        KASSERT(e >= 0);
+//                        KASSERT(e < localFlowsOnDownEdges.size());
+//                        ++localFlowsOnDownEdges[e];
+//                    }
+//
+//                }
             }
 
             // Returns the length of the i-th shortest path.
@@ -105,11 +127,65 @@ namespace trafficassignment {
 
         private:
 
+            // Propagates the flows onto the packed paths in the upward or downward graph for all K searches run.
+            // Uses a tournament tree to merge searches which meet at a vertex and have the same meeting hub.
+            template<bool UP>
+            void propagateFlowsOntoPackedPaths() {
+
+                Key k; // Lowest rank of any active search and its meeting hub index.
+                while ((k = nextVertices.minKey()).rank != INFTY) {
+                    const auto i = nextVertices.minSeq(); // Index of search in {0,..,K-1} that reached v
+//                    const auto mhI = meetingHubIndices[i]; // Meeting hub index for search i
+                    const auto &v = k.rank;
+                    const auto &mhI = k.meetingHubIdx;
+                    static const auto &graph = UP ? upGraph : downGraph;
+                    const auto e = UP ? ctl.upPathEdge(v, mhI) : ctl.downPathEdge(v, mhI);
+                    const auto newK = e == INVALID_EDGE ? Key(INFTY, INFTY) : Key(graph.edgeHead(e), mhI);
+                    nextVertices.deleteMin(newK);
+
+                    // If two or more of the k searches merged at v and have the same meeting hub idx, block all but one
+                    // of them. Increase the amount of flow that needs to be propagated for the non-blocked search.
+                    while (nextVertices.minKey() == k) {
+                        addFlow[i] += addFlow[nextVertices.minSeq()];
+                        nextVertices.deleteMin({INFTY, INFTY});
+                    }
+
+                    // Add flow to edge e.
+                    if (e != INVALID_EDGE) {
+                        if constexpr (UP) {
+                            localFlowsOnUpEdges[e] += addFlow[i];
+                        } else {
+                            localFlowsOnDownEdges[e] += addFlow[i];
+                        }
+                    }
+                }
+            }
+
             const CTLMetricT::SearchGraph &upGraph;
             const CTLMetricT::SearchGraph &downGraph;
             const Permutation &ranks; // rank[v] is the rank of vertex v in the contraction order
+            const LabellingT &ctl;
             CTLQuery <CTLMetricT::SearchGraph, LabellingT, CTLLabelSet> ctlQuery;
             std::array<int, K> distances; // distances computed in last call to run()
+            std::array<int, K> meetingHubIndices; // The index of the meeting hub for each search.
+
+            std::array<int, K> addFlow; // The amount of flow to be added to the edges on the path of each search.
+            struct Key {
+                int rank = INFTY;
+                int meetingHubIdx = INFTY;
+
+                friend bool operator<(const Key& k1, const Key &k2) {
+                    return k1.rank < k2.rank || (k1.rank == k2.rank && k1.meetingHubIdx < k2.meetingHubIdx);
+                }
+
+                friend bool operator==(const Key& k1, const Key &k2) {
+                    return k1.rank == k2.rank && k1.meetingHubIdx == k2.meetingHubIdx;
+                }
+            };
+            std::array<Key, K> sourceKeys;
+            std::array<Key, K> targetKeys;
+            TournamentTree<TA_LOG_K, Key> nextVertices; // Tournament tree to merge searches.
+
 
             AlignedVector<int> &flowsOnUpEdges;     // The flows in the upward graph.
             AlignedVector<int> &flowsOnDownEdges;   // The flows in the downward graph.
@@ -200,13 +276,15 @@ namespace trafficassignment {
 #pragma omp parallel // parallelizes callbacks within cch.forEachVertexTopDown.
 #pragma omp single nowait
             cch.forEachVertexTopDown([&](const int &u) {
-                FORALL_INCIDENT_EDGES(upGraph, u, e)if (upGraph.unpackingInfo(e).second == INVALID_EDGE) {
+                FORALL_INCIDENT_EDGES(upGraph, u, e)
+                    if (upGraph.unpackingInfo(e).second == INVALID_EDGE) {
                         flowsOnInputEdges[upGraph.unpackingInfo(e).first] = flowsOnUpEdges[e];
                     } else {
                         flowsOnDownEdges[upGraph.unpackingInfo(e).first] += flowsOnUpEdges[e];
                         flowsOnUpEdges[upGraph.unpackingInfo(e).second] += flowsOnUpEdges[e];
                     }
-                FORALL_INCIDENT_EDGES(downGraph, u, e)if (downGraph.unpackingInfo(e).second == INVALID_EDGE) {
+                FORALL_INCIDENT_EDGES(downGraph, u, e)
+                    if (downGraph.unpackingInfo(e).second == INVALID_EDGE) {
                         flowsOnInputEdges[downGraph.unpackingInfo(e).first] = flowsOnDownEdges[e];
                     } else {
                         flowsOnDownEdges[downGraph.unpackingInfo(e).first] += flowsOnDownEdges[e];

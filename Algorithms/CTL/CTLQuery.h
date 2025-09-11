@@ -184,7 +184,7 @@ public:
         return lastDistance;
     }
 
-    int32_t getLastMeetingHubIdx() const {
+    int32_t getMeetingHubIdx() const {
         return lastMeetingHubIdx;
     }
 
