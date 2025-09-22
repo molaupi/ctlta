@@ -111,8 +111,10 @@ class DimacsImporter {
         assert(type == 'v');
         assert(currentVertex.id > 0); assert(currentVertex.id <= vertexCount);
       }
-//        const auto conversionFactor = static_cast<double>(LatLng::PRECISION) / coordinatePrecision;
-        const auto conversionFactor = 1.0 / coordinatePrecision;
+        const auto conversionFactor = static_cast<double>(LatLng::PRECISION) / coordinatePrecision;
+      lat = static_cast<int>(conversionFactor * lat);
+      lng = static_cast<int>(conversionFactor * lng);
+      currentVertex.latLng = {lat, lng};
       currentVertex.latLng = {conversionFactor * lat, conversionFactor * lng};
       return !coFile.eof();
     } else {
