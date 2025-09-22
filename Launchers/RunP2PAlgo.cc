@@ -291,18 +291,19 @@ inline void runQueries(const CommandLineParser &clp) {
         using CTLLabelSet = std::conditional_t<CTL_SIMD_LOGK == 0,
                 BasicLabelSet<0, ParentInfo::NO_PARENT_INFO>,
                 SimdLabelSet<CTL_SIMD_LOGK, ParentInfo::NO_PARENT_INFO>>;
-        using LabellingT = TruncatedTreeLabelling<CTLLabelSet>;
+        using LabellingT = TruncatedTreeLabelling<CTLLabelSet::K, CTLLabelSet::KEEP_PARENT_EDGES>;
         LabellingT ctl(treeHierarchy);
         ctl.init();
 
-        CTLMetric<LabellingT> metric(treeHierarchy, cch, useLengths ? &graph.length(0) : &graph.travelTime(0));
+        using Metric = CTLMetric<LabellingT, CTLLabelSet>;
+        Metric metric(treeHierarchy, cch, useLengths ? &graph.length(0) : &graph.travelTime(0));
         metric.buildCustomizedCTL(ctl);
 
         outputFile << "# Graph: " << graphFileName << '\n';
         outputFile << "# Separator: " << sepFileName << '\n';
         outputFile << "# OD pairs: " << demandFileName << '\n';
 
-        CTLQuery<CTLMetric<LabellingT>::SearchGraph, LabellingT> algo(treeHierarchy, metric.upwardGraph(),
+        CTLQuery<Metric::SearchGraph, LabellingT, CTLLabelSet> algo(treeHierarchy, metric.upwardGraph(),
                                                                       metric.downwardGraph(), metric.upwardWeights(),
                                                                       metric.downwardWeights(), ctl);
 
@@ -545,7 +546,7 @@ inline void runPreprocessing(const CommandLineParser &clp) {
         using CTLLabelSet = std::conditional_t<CTL_SIMD_LOGK == 0,
                 BasicLabelSet<0, ParentInfo::NO_PARENT_INFO>,
                 SimdLabelSet<CTL_SIMD_LOGK, ParentInfo::NO_PARENT_INFO>>;
-        using LabellingT = TruncatedTreeLabelling<CTLLabelSet>;
+        using LabellingT = TruncatedTreeLabelling<CTLLabelSet::K, CTLLabelSet::KEEP_PARENT_EDGES>;
         LabellingT ctl(treeHierarchy);
         ctl.init();
         const auto preprocessTime = timer.elapsed<std::chrono::microseconds>();
@@ -566,7 +567,7 @@ inline void runPreprocessing(const CommandLineParser &clp) {
                 cchCustom = timer.elapsed<std::chrono::microseconds>();
             }
             {
-                CTLMetric<LabellingT, CTL_USE_PERFECT_CUSTOMIZATION> metric(treeHierarchy, cch, &graph.travelTime(0));
+                CTLMetric<LabellingT, CTLLabelSet, CTL_USE_PERFECT_CUSTOMIZATION> metric(treeHierarchy, cch, &graph.travelTime(0));
                 timer.restart();
                 metric.buildCustomizedCTL(ctl);
                 tot = timer.elapsed<std::chrono::microseconds>();

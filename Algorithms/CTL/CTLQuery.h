@@ -25,6 +25,14 @@ class CTLQuery {
                 accessVertices.assign(numHubs, INVALID_VERTEX);
         }
 
+        int *startDists() {
+            return dists.data();
+        }
+
+        int const *startDists() const {
+            return dists.data();
+        }
+
         const int32_t& dist(const uint32_t &hubIdx) const {
             KASSERT(hubIdx < numHubs());
             return dists[hubIdx];
