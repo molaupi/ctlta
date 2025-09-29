@@ -257,9 +257,16 @@ private:
                 func(v);
         } else {
             for (auto child = decomp.leftChild(node); child != 0; child = decomp.rightSibling(child)) {
-#pragma omp task
-                forEachVertexBottomUp(from, decomp.lastSeparatorVertex(child), child, func);
-                from = decomp.lastSeparatorVertex(child);
+                int child_copy = child;
+                int from_copy = from;
+                int to_copy = decomp.lastSeparatorVertex(child_copy);
+
+#pragma omp task firstprivate(from_copy, to_copy, child_copy)
+                {
+                forEachVertexBottomUp(from_copy, to_copy, child_copy, func);
+                }
+
+                from = to_copy;
             }
 #pragma omp taskwait
             for (auto v = from; v < to; ++v)
@@ -282,10 +289,18 @@ private:
         } else {
             for (auto v = to - 1; v >= decomp.firstSeparatorVertex(node); --v)
                 func(v);
+
             for (auto child = decomp.leftChild(node); child != 0; child = decomp.rightSibling(child)) {
-#pragma omp task
-                forEachVertexTopDown(from, decomp.lastSeparatorVertex(child), child, func);
-                from = decomp.lastSeparatorVertex(child);
+                int child_copy = child;
+                int from_copy = from;
+                int to_copy = decomp.lastSeparatorVertex(child_copy);
+
+#pragma omp task firstprivate(from_copy, to_copy, child_copy)
+                {
+                    forEachVertexTopDown(from_copy, to_copy, child_copy, func);
+                }
+
+                from = to_copy;
             }
         }
     }
